@@ -941,3 +941,165 @@ body {
   border-radius: 50%;
   cursor: pointer;
 }
+
+/* Mockup Upload Section */
+.mockup-section .section-desc {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 16px;
+}
+
+.mockup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.mockup-item {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  border: 2px dashed #333;
+  transition: all 0.2s;
+}
+
+.mockup-item:hover {
+  border-color: #ec4899;
+}
+
+.mockup-item.has-image {
+  border-style: solid;
+  border-color: #22c55e;
+}
+
+.mockup-item .niche-name {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mockup-item .niche-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.mockup-item .mockup-preview {
+  width: 100%;
+  height: 120px;
+  background: #0f0f1a;
+  border-radius: 8px;
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.mockup-item .mockup-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.mockup-item .mockup-preview .placeholder {
+  font-size: 32px;
+  opacity: 0.3;
+}
+
+.mockup-item .upload-btn {
+  background: linear-gradient(135deg, #ec4899, #f472b6);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+}
+
+.mockup-item .upload-btn:hover {
+  opacity: 0.9;
+}
+
+.mockup-item .remove-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.mockup-item input[type="file"] {
+  display: none;
+}
+
+/* Template type badges */
+.template-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.template-type-badge.professional {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+}
+
+.template-type-badge.viral {
+  background: linear-gradient(135deg, #ec4899, #db2777);
+  color: white;
+}
+
+/* Improved variation cards */
+.variation-card .preview-inner {
+  position: relative;
+}
+
+.variation-card .mockup-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #22c55e;
+  color: white;
+  font-size: 8px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+/* Mockup status in generate page */
+.tag.has-mockup {
+  border: 1px solid #22c55e;
+}
+
+.tag.no-mockup {
+  border: 1px solid #ef4444;
+  opacity: 0.7;
+}
+
+.mockup-note {
+  font-size: 13px;
+  color: #facc15;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: rgba(250, 204, 21, 0.1);
+  border-radius: 6px;
+}
+
+.mockup-note a {
+  color: #ec4899;
+  text-decoration: underline;
+}

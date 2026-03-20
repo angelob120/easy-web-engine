@@ -3,7 +3,7 @@
  * Data Configuration
  */
 
-// Default Niches
+// Default Niches (these are the variation factors for mockup template)
 const DEFAULT_NICHES = [
   'Plumber',
   'Roofer',
@@ -17,7 +17,7 @@ const DEFAULT_NICHES = [
   'Electrician'
 ];
 
-// Default Cities (Metro Detroit)
+// Default Cities (Metro Detroit) - for other templates
 const DEFAULT_CITIES = [
   'Detroit',
   'Dearborn',
@@ -49,18 +49,32 @@ const DEFAULT_TAGLINES = [
   '100% Custom'
 ];
 
-// Niche Colors (for branding consistency)
+// Niche Accent Colors (the colored text - subtitle)
 const NICHE_COLORS = {
-  'Plumber': '#3B82F6',
-  'Roofer': '#F59E0B',
-  'Landscaper': '#22C55E',
-  'Barber': '#8B5CF6',
-  'Salon': '#EC4899',
-  'Contractor': '#F97316',
-  'Dentist': '#06B6D4',
-  'Auto Shop': '#EF4444',
-  'HVAC': '#6366F1',
-  'Electrician': '#EAB308'
+  'Plumber': '#67D4E8',      // Cyan/light blue
+  'Roofer': '#D4A03C',       // Gold
+  'Landscaper': '#4ADE80',   // Bright green
+  'Barber': '#A78BFA',       // Purple
+  'Salon': '#F472B6',        // Pink
+  'Contractor': '#FB923C',   // Orange
+  'Dentist': '#22D3EE',      // Cyan
+  'Auto Shop': '#F87171',    // Red
+  'HVAC': '#818CF8',         // Indigo
+  'Electrician': '#FACC15'   // Yellow
+};
+
+// Niche Background Colors (dark gradient base)
+const NICHE_BG_COLORS = {
+  'Plumber': '#1A2D33',      // Dark teal
+  'Roofer': '#2A2015',       // Dark brown
+  'Landscaper': '#162016',   // Dark green
+  'Barber': '#1F1A2E',       // Dark purple
+  'Salon': '#2A1520',        // Dark pink
+  'Contractor': '#2A1A10',   // Dark orange
+  'Dentist': '#152530',      // Dark cyan
+  'Auto Shop': '#2A1515',    // Dark red
+  'HVAC': '#1A1A30',         // Dark indigo
+  'Electrician': '#2A2815'   // Dark yellow
 };
 
 // Niche Emojis
@@ -77,8 +91,53 @@ const NICHE_EMOJIS = {
   'Electrician': '⚡'
 };
 
+// Niche display names for subtitle (some need adjustment)
+const NICHE_DISPLAY = {
+  'Plumber': 'PLUMBING',
+  'Roofer': 'ROOFING',
+  'Landscaper': 'LANDSCAPER',
+  'Barber': 'BARBER',
+  'Salon': 'SALON',
+  'Contractor': 'CONTRACTOR',
+  'Dentist': 'DENTAL',
+  'Auto Shop': 'AUTO SHOP',
+  'HVAC': 'HVAC',
+  'Electrician': 'ELECTRICIAN'
+};
+
+// Niche Mockup Images (stored as data URLs)
+// Users upload their device mockup composites per niche
+let NICHE_MOCKUPS = {};
+
+// Load saved mockups from localStorage
+try {
+  const saved = localStorage.getItem('niche_mockups');
+  if (saved) {
+    NICHE_MOCKUPS = JSON.parse(saved);
+  }
+} catch (e) {
+  console.log('No saved mockups found');
+}
+
 // Template Definitions
 const TEMPLATES = [
+  {
+    id: 'mockup-showcase',
+    name: 'Device Mockup Showcase',
+    type: 'professional',
+    layout: 'mockup-showcase',
+    variables: ['NICHE'],  // Only niche - each niche = 1 variation
+    description: '100% FREE headline with device mockups - 1 per niche',
+    requiresMockup: true
+  },
+  {
+    id: 'simple-offer',
+    name: 'Simple Offer',
+    type: 'professional',
+    layout: 'simple-offer',
+    variables: ['NICHE', 'CITY'],
+    description: 'Clean offer layout without mockups'
+  },
   {
     id: '1',
     name: 'Hook + Value Bomb',
@@ -118,8 +177,8 @@ const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1920;
 
 // Safe Zones (avoiding platform UI overlays)
-const SAFE_TOP = 180;      // Top safe zone in pixels
-const SAFE_BOTTOM = 400;   // Bottom safe zone in pixels
+const SAFE_TOP = 180;
+const SAFE_BOTTOM = 400;
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
@@ -129,7 +188,10 @@ if (typeof module !== 'undefined' && module.exports) {
     DEFAULT_HOOKS,
     DEFAULT_TAGLINES,
     NICHE_COLORS,
+    NICHE_BG_COLORS,
     NICHE_EMOJIS,
+    NICHE_DISPLAY,
+    NICHE_MOCKUPS,
     TEMPLATES,
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
