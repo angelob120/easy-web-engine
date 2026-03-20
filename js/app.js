@@ -3,10 +3,6 @@
  * Main Application Logic
  */
 
-// FFmpeg instance
-let ffmpeg = null;
-let ffmpegLoaded = false;
-
 const App = {
   // State
   niches: [...DEFAULT_NICHES],
@@ -537,70 +533,77 @@ const App = {
   },
 
   /**
-   * Load FFmpeg
+   * Create video from canvas using native MediaRecorder API
+   * Works locally without CORS issues
    */
-  async loadFFmpeg(statusText) {
-    if (ffmpegLoaded && ffmpeg) return ffmpeg;
-    
-    statusText.textContent = 'Loading video encoder...';
-    
-    const { FFmpeg } = FFmpegWASM;
-    const { fetchFile } = FFmpegUtil;
-    
-    ffmpeg = new FFmpeg();
-    
-    ffmpeg.on('log', ({ message }) => {
-      console.log('[FFmpeg]', message);
+  async createVideoFromCanvas(template, variables, duration) {
+    return new Promise((resolve, reject) => {
+      // Create a dedicated canvas for video recording
+      const videoCanvas = document.createElement('canvas');
+      videoCanvas.width = CANVAS_WIDTH;
+      videoCanvas.height = CANVAS_HEIGHT;
+      const ctx = videoCanvas.getContext('2d');
+      
+      // Render the template to our video canvas
+      const mainCanvas = document.getElementById('render-canvas');
+      TemplateRenderer.renderToCanvas(template, variables);
+      ctx.drawImage(mainCanvas, 0, 0);
+      
+      // Get canvas stream
+      const stream = videoCanvas.captureStream(30); // 30 FPS
+      
+      // Determine best supported format
+      let mimeType = 'video/webm;codecs=vp9';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm;codecs=vp8';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/mp4';
+      }
+      
+      const chunks = [];
+      const recorder = new MediaRecorder(stream, { 
+        mimeType,
+        videoBitsPerSecond: 5000000 // 5 Mbps for good quality
+      });
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+      
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        resolve(blob);
+      };
+      
+      recorder.onerror = (e) => {
+        reject(e.error || new Error('Recording failed'));
+      };
+      
+      // Start recording
+      recorder.start();
+      
+      // We need to keep drawing frames to make the video work
+      // (static canvas sometimes has issues with MediaRecorder)
+      const startTime = Date.now();
+      const drawFrame = () => {
+        ctx.drawImage(mainCanvas, 0, 0);
+        if (Date.now() - startTime < duration * 1000) {
+          requestAnimationFrame(drawFrame);
+        }
+      };
+      drawFrame();
+      
+      // Stop after duration
+      setTimeout(() => {
+        recorder.stop();
+      }, duration * 1000);
     });
-
-    ffmpeg.on('progress', ({ progress }) => {
-      // Progress updates during encoding
-    });
-
-    await ffmpeg.load({
-      coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
-      wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
-    });
-    
-    ffmpegLoaded = true;
-    return ffmpeg;
-  },
-
-  /**
-   * Create video from image
-   */
-  async createVideoFromImage(ffmpeg, imageData, duration, filename) {
-    const { fetchFile } = FFmpegUtil;
-    
-    // Write image to FFmpeg filesystem
-    const imageBlob = this.dataURLtoBlob(imageData);
-    const imageBuffer = await imageBlob.arrayBuffer();
-    await ffmpeg.writeFile('input.png', new Uint8Array(imageBuffer));
-    
-    // Create video with static image
-    // Using libx264 with appropriate settings for social media
-    await ffmpeg.exec([
-      '-loop', '1',
-      '-i', 'input.png',
-      '-c:v', 'libx264',
-      '-t', duration.toString(),
-      '-pix_fmt', 'yuv420p',
-      '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2',
-      '-r', '30',
-      '-preset', 'ultrafast',
-      '-crf', '23',
-      '-movflags', '+faststart',
-      filename
-    ]);
-    
-    // Read the output video
-    const data = await ffmpeg.readFile(filename);
-    
-    // Clean up
-    await ffmpeg.deleteFile('input.png');
-    await ffmpeg.deleteFile(filename);
-    
-    return new Blob([data.buffer], { type: 'video/mp4' });
   },
 
   /**
@@ -622,14 +625,17 @@ const App = {
 
     modal.classList.add('active');
     progressBar.style.width = '0%';
-    statusText.textContent = 'Initializing...';
+    statusText.textContent = 'Initializing video encoder...';
 
     try {
-      // Load FFmpeg
-      const ffmpegInstance = await this.loadFFmpeg(statusText);
-      
       const zip = new JSZip();
       const videoFolder = zip.folder('videos');
+      
+      // Determine file extension based on browser support
+      let fileExt = 'webm';
+      if (MediaRecorder.isTypeSupported('video/mp4')) {
+        fileExt = 'mp4';
+      }
       
       let captionsTxt = 'EASY WEB STUDIOS - VIDEO CAPTIONS\n';
       captionsTxt += '=====================================\n\n';
@@ -641,20 +647,16 @@ const App = {
         const template = this.templates.find(t => t.id === variation.templateId);
 
         if (template) {
-          statusText.textContent = `Rendering video ${i + 1} of ${list.length}...`;
+          statusText.textContent = `Recording video ${i + 1} of ${list.length}... (${this.videoDuration}s)`;
           
-          // Render image
-          const dataUrl = TemplateRenderer.renderToCanvas(template, variation.variables);
-          
-          // Create video from image
+          // Create video from canvas
           const baseFilename = `${(i + 1).toString().padStart(3, '0')}-${(variation.variables.NICHE || 'post').replace(/\s+/g, '-')}-${(variation.variables.CITY || 'content').replace(/\s+/g, '-')}`;
-          const videoFilename = `${baseFilename}.mp4`;
+          const videoFilename = `${baseFilename}.${fileExt}`;
           
-          const videoBlob = await this.createVideoFromImage(
-            ffmpegInstance, 
-            dataUrl, 
-            this.videoDuration,
-            'output.mp4'
+          const videoBlob = await this.createVideoFromCanvas(
+            template,
+            variation.variables,
+            this.videoDuration
           );
           
           videoFolder.file(videoFilename, videoBlob);
@@ -667,8 +669,6 @@ const App = {
 
         const progress = ((i + 1) / list.length) * 100;
         progressBar.style.width = progress + '%';
-
-        await new Promise(r => setTimeout(r, 10));
       }
 
       // Add captions file
@@ -686,7 +686,7 @@ This ZIP contains ${list.length} videos ready to upload:
 
 FORMAT: 1080x1920 pixels (9:16 vertical)
 DURATION: ${this.videoDuration} seconds each
-CODEC: H.264 (MP4)
+CODEC: VP9/WebM (universally supported)
 
 SAFE ZONES:
 - Top 180px and Bottom 400px kept clear for platform UI
@@ -696,6 +696,9 @@ HOW TO USE:
 2. Copy caption from captions.txt
 3. Add trending music in-app if desired
 4. Post and go viral! 🚀
+
+NOTE: WebM format is accepted by TikTok, YouTube, Instagram, and Facebook.
+If you need MP4, use a free converter like CloudConvert or HandBrake.
 
 Generated by Easy Web Studios Content Engine
 `;
@@ -714,20 +717,18 @@ Generated by Easy Web Studios Content Engine
       
     } catch (error) {
       console.error('Video creation error:', error);
-      statusText.textContent = `Error: ${error.message}`;
+      statusText.textContent = `Error: ${error.message}. Trying image fallback...`;
       
       // Fallback to image export
-      setTimeout(async () => {
-        statusText.textContent = 'Falling back to image export...';
-        await this.downloadImagesZip(mode, list, modal, progressBar, statusText);
-      }, 2000);
+      await new Promise(r => setTimeout(r, 1500));
+      await this.downloadImagesZip(list, modal, progressBar, statusText);
     }
   },
 
   /**
    * Fallback: Download ZIP with images (if video creation fails)
    */
-  async downloadImagesZip(mode, list, modal, progressBar, statusText) {
+  async downloadImagesZip(list, modal, progressBar, statusText) {
     const zip = new JSZip();
     const imgFolder = zip.folder('images');
     
