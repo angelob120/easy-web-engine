@@ -1,0 +1,21 @@
+{
+  "name": "easy-web-content-engine",
+  "version": "1.0.0",
+  "description": "Content variation engine for TikTok, YouTube Shorts, Instagram Reels, and Facebook Reels",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx live-server --port=3000"
+  },
+  "keywords": [
+    "content",
+    "social-media",
+    "tiktok",
+    "reels",
+    "shorts",
+    "marketing"
+  ],
+  "author": "Easy Web Studios",
+  "license": "MIT",
+  "devDependencies": {}
+}

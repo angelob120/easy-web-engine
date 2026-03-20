@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Easy Web Studios - Content Engine</title>
+  
+  <!-- External Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <!-- FFmpeg for video creation -->
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
+  <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+  
+  <!-- Local Styles -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Hidden Canvas for Rendering -->
+  <canvas id="render-canvas"></canvas>
+  
+  <!-- Download Modal -->
+  <div class="modal-overlay" id="download-modal">
+    <div class="modal">
+      <h3 id="modal-title">📦 Creating ZIP</h3>
+      <p id="modal-desc">Rendering your content...</p>
+      <div class="progress-bar">
+        <div class="progress-fill" id="download-progress" style="width: 0%"></div>
+      </div>
+      <p class="status" id="download-status">Preparing...</p>
+    </div>
+  </div>
+  
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-text">
+        <h1>Easy Web Studios</h1>
+        <p>Reels & Shorts Engine</p>
+      </div>
+    </div>
+    <nav class="nav" id="main-nav">
+      <button class="nav-btn active" data-page="dashboard">📊 <span>Dashboard</span></button>
+      <button class="nav-btn" data-page="templates">📑 <span>Templates</span></button>
+      <button class="nav-btn" data-page="generate">✨ <span>Generate</span></button>
+      <button class="nav-btn" data-page="variations">🎬 <span>Content</span></button>
+      <button class="nav-btn" data-page="settings">⚙️ <span>Settings</span></button>
+    </nav>
+  </header>
+  
+  <!-- Main Content -->
+  <main class="main">
+    
+    <!-- Dashboard Page -->
+    <div class="page active" id="page-dashboard">
+      <div class="platform-header">
+        <div class="platform-badges">
+          <span class="platform-badge tiktok">🎵 TikTok</span>
+          <span class="platform-badge youtube">▶️ YT Shorts</span>
+          <span class="platform-badge instagram">📸 IG Reels</span>
+          <span class="platform-badge facebook">📘 FB Reels</span>
+        </div>
+        <p class="platform-subtitle">All content optimized for 9:16 vertical format with safe zones</p>
+      </div>
+      
+      <div class="stats-grid">
+        <div class="stat-card">
+          <label>Templates</label>
+          <div class="value" id="stat-templates">4</div>
+        </div>
+        <div class="stat-card">
+          <label>Variations</label>
+          <div class="value" id="stat-variations">0</div>
+        </div>
+        <div class="stat-card">
+          <label>Niches</label>
+          <div class="value" id="stat-niches">10</div>
+        </div>
+        <div class="stat-card">
+          <label>Cities</label>
+          <div class="value" id="stat-cities">10</div>
+        </div>
+      </div>
+      
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="card-title">✨ Quick Generate</h3>
+          <p class="card-desc">Create scroll-stopping content for all platforms</p>
+          <button class="btn btn-pink btn-full" onclick="App.navigateTo('generate')">Start Creating →</button>
+        </div>
+        <div class="card">
+          <h3 class="card-title">🔥 Viral Templates</h3>
+          <div id="recent-templates"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Templates Page -->
+    <div class="page" id="page-templates">
+      <div class="page-header">
+        <h2>Viral Templates</h2>
+      </div>
+      <div class="grid-3" id="template-grid"></div>
+    </div>
+    
+    <!-- Generate Page -->
+    <div class="page" id="page-generate">
+      <h2 class="page-title">Generate Content</h2>
+      <div class="generate-layout">
+        <div class="generate-sidebar">
+          <div class="card">
+            <h3 class="card-title">Select Template</h3>
+            <div class="template-selector" id="template-selector"></div>
+          </div>
+        </div>
+        
+        <div class="generate-main">
+          <div class="card" id="preview-card" style="display: none;">
+            <h3 class="card-title">Preview (9:16)</h3>
+            <div class="preview-row">
+              <div id="generate-preview" class="preview-container"></div>
+              <div class="caption-box">
+                <h4>📝 Auto-Generated Caption</h4>
+                <p id="preview-caption">We just built a FREE website for Detroit Roofers 🔥 No design fees, just pay hosting.</p>
+                <div class="hashtags" id="preview-hashtags">#freeweb #smallbusiness #detroit #roofer #entrepreneur</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="card" id="variables-card" style="display: none;">
+            <h3 class="card-title">Variable Lists</h3>
+            <div id="variable-sections"></div>
+          </div>
+          
+          <div class="card" id="math-card" style="display: none;">
+            <div class="var-math">
+              <div class="var-math-label">
+                <p>Content Variations</p>
+                <span>Total unique posts</span>
+              </div>
+              <div class="var-math-value">
+                <div class="number" id="variation-count">0</div>
+                <span>videos</span>
+              </div>
+            </div>
+            
+            <div class="slider-container">
+              <label>Max content to generate</label>
+              <input type="range" id="max-slider" min="10" max="500" value="50">
+              <div class="slider-labels">
+                <span>10</span>
+                <span class="current" id="max-value">50</span>
+                <span>500</span>
+              </div>
+            </div>
+            
+            <div id="progress-section" style="display: none;">
+              <div class="progress-container">
+                <div class="progress-bar">
+                  <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+                <p class="progress-text">Generating... <span id="progress-percent">0</span>%</p>
+              </div>
+            </div>
+            
+            <button class="btn btn-pink btn-full" id="generate-btn" onclick="App.generateVariations()">
+              🎬 Generate Content
+            </button>
+          </div>
+          
+          <div class="card" id="no-template-card">
+            <div class="empty-state">
+              <div class="icon">🎬</div>
+              <p>Select a template to start creating</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Variations/Content Page -->
+    <div class="page" id="page-variations">
+      <div class="gallery-header">
+        <div class="gallery-header-top">
+          <div>
+            <h2>Content Library</h2>
+            <p><span id="variation-total">0</span> pieces ready for posting</p>
+          </div>
+          <div class="platform-badges">
+            <span class="platform-badge tiktok">TikTok</span>
+            <span class="platform-badge youtube">Shorts</span>
+            <span class="platform-badge instagram">Reels</span>
+            <span class="platform-badge facebook">FB</span>
+          </div>
+        </div>
+        <div class="gallery-controls">
+          <div class="video-duration-control">
+            <label>Video Duration: <span id="video-duration-value">5</span>s</label>
+            <input type="range" id="video-duration" min="3" max="10" value="5" step="1">
+          </div>
+          <button class="btn btn-pink" id="zip-selected-btn" style="display: none;" onclick="App.downloadZip('selected')">
+            📦 Download Videos (<span id="selected-count">0</span>)
+          </button>
+          <button class="btn btn-success" id="zip-all-btn" style="display: none;" onclick="App.downloadZip('all')">
+            🎬 Download All Videos + Captions
+          </button>
+          <button class="btn btn-secondary" onclick="App.selectAllVariations()">Select All</button>
+          <button class="btn btn-secondary" onclick="App.clearSelection()">Clear</button>
+        </div>
+      </div>
+      <div id="gallery-content">
+        <div class="empty-state">
+          <div class="icon">🎬</div>
+          <p>No content generated yet</p>
+          <button class="btn btn-pink" onclick="App.navigateTo('generate')">Create Content</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Settings Page -->
+    <div class="page" id="page-settings">
+      <h2 class="page-title">Settings</h2>
+      
+      <div class="card settings-section">
+        <h3>Niche List</h3>
+        <div class="tag-list" id="niche-tags"></div>
+        <div class="input-row">
+          <input type="text" id="new-niche" placeholder="Add new niche (press Enter)">
+        </div>
+      </div>
+      
+      <div class="card settings-section">
+        <h3>City List</h3>
+        <div class="tag-list" id="city-tags"></div>
+        <div class="input-row">
+          <input type="text" id="new-city" placeholder="Add new city (press Enter)">
+        </div>
+      </div>
+      
+      <div class="card settings-section">
+        <h3>Hook Lines</h3>
+        <div class="tag-list" id="hook-tags"></div>
+        <div class="input-row">
+          <input type="text" id="new-hook" placeholder="Add new hook line (press Enter)">
+        </div>
+      </div>
+      
+      <div class="card settings-section">
+        <h3>Taglines</h3>
+        <div class="tag-list" id="tagline-tags"></div>
+        <div class="input-row">
+          <input type="text" id="new-tagline" placeholder="Add new tagline (press Enter)">
+        </div>
+      </div>
+    </div>
+    
+  </main>
+  
+  <!-- Local Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
