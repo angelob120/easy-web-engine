@@ -139,22 +139,21 @@ function parsePage(html) {
     seen.add(id);
     const slug = link.replace(/\/meme\/\d*\/?/, '').replace(/[_-]/g, ' ');
     const name = slug.replace(/\b\w/g, c => c.toUpperCase()).trim() || ('Template ' + id);
-    const ext = (imgUrl.match(/\.(gif|jpg|jpeg|png|webp)$/i) || ['', 'jpg'])[1].toLowerCase();
-    results.push({ id, name, url: imgUrl, box_count: 2, isGif: ext === 'gif' });
+    const fullUrl1 = imgUrl.startsWith('//') ? 'https:' + imgUrl : imgUrl;
+    const ext = (fullUrl1.match(/\.(gif|jpg|jpeg|png|webp)$/i) || ['', 'jpg'])[1].toLowerCase();
+    results.push({ id, name, url: fullUrl1, box_count: 2, isGif: ext === 'gif' });
   }
 
-  // Strategy 2: fallback — every imgflip CDN image on the page
-  const re2 = /src=["']https?:\/\/i\.imgflip\.com\/(?:4\/)?([a-z0-9]{3,})\.(?:jpg|gif|png|webp)["']/gi;
+  // Strategy 2: fallback — every imgflip CDN image on the page (handles both https:// and //)
+  const re2 = /src=["']((?:https?:)?\/\/i\.imgflip\.com\/(?:4\/)?([a-z0-9]{3,})\.(?:jpg|gif|png|webp))["']/gi;
   while ((m = re2.exec(html)) !== null) {
-    const id = m[1];
+    const rawImgUrl = m[1];
+    const id = m[2];
     if (seen.has(id)) continue;
-    // Extract full URL
-    const urlMatch = html.slice(m.index).match(/src=["'](https?:\/\/i\.imgflip\.com[^"']+)["']/i);
-    if (!urlMatch) continue;
     seen.add(id);
-    const imgUrl = urlMatch[1];
-    const ext = (imgUrl.match(/\.(gif|jpg|jpeg|png|webp)$/i) || ['', 'jpg'])[1].toLowerCase();
-    results.push({ id, name: 'Template ' + id, url: imgUrl, box_count: 2, isGif: ext === 'gif' });
+    const fullUrl2 = rawImgUrl.startsWith('//') ? 'https:' + rawImgUrl : rawImgUrl;
+    const ext2 = (fullUrl2.match(/\.(gif|jpg|jpeg|png|webp)$/i) || ['', 'jpg'])[1].toLowerCase();
+    results.push({ id, name: 'Template ' + id, url: fullUrl2, box_count: 2, isGif: ext2 === 'gif' });
   }
 
   return results;
