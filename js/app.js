@@ -251,7 +251,8 @@ const App = {
         '<span class="tpl-visible-count">👁️ ' + visibleCount + ' shown in editor</span>' +
       '</div>' +
       '<div class="template-mgmt-btns">' +
-        '<button class="btn btn-secondary" onclick="App.openImgflipImporter()">📥 Import from Imgflip</button>' +
+        '<button class="btn btn-secondary" onclick="App.openImgflipImporter()">📥 Pick from Imgflip</button>' +
+        '<button class="btn btn-purple" onclick="App.importAllImgflip()">🌐 Import All (Memes + GIFs)</button>' +
         '<button class="btn btn-pink" onclick="App.openTemplateEditor(null)">+ New Template</button>' +
       '</div>' +
     '</div>' +
@@ -482,6 +483,89 @@ const App = {
       status.textContent = '❌ Import failed: ' + e.message;
       btn.textContent = 'Retry';
       btn.disabled = false;
+    }
+  },
+
+  // Import ALL memes + GIFs — full scrape, no selection needed
+  async importAllImgflip() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay active';
+    modal.id = 'imgflip-all-modal';
+    modal.innerHTML =
+      '<div class="modal modal-large imgflip-importer">' +
+        '<div class="modal-header">' +
+          '<h3>🌐 Import All Imgflip Memes + GIFs</h3>' +
+          '<button class="close-btn" id="imgflip-all-close" onclick="document.getElementById(\'imgflip-all-modal\').remove()" disabled>×</button>' +
+        '</div>' +
+        '<div class="imgflip-download-progress" style="min-height:300px">' +
+          '<div class="imgflip-dl-title">Scraping all imgflip template pages...</div>' +
+          '<div class="imgflip-dl-bar-wrap"><div class="imgflip-dl-bar" id="all-dl-bar" style="width:0%"></div></div>' +
+          '<div class="imgflip-dl-status" id="all-dl-status">Starting — this may take a few minutes...</div>' +
+          '<div class="imgflip-dl-log" id="all-dl-log"></div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    const bar = document.getElementById('all-dl-bar');
+    const status = document.getElementById('all-dl-status');
+    const log = document.getElementById('all-dl-log');
+    const closeBtn = document.getElementById('imgflip-all-close');
+
+    const addLog = (text, color) => {
+      const el = document.createElement('div');
+      el.className = 'imgflip-dl-entry';
+      if (color) el.style.color = color;
+      el.textContent = text;
+      log.insertBefore(el, log.firstChild);
+    };
+
+    try {
+      const res = await fetch('/api/imgflip/import-all', { method: 'POST' });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let total = 0;
+      let done = 0;
+
+      while (true) {
+        const { value, done: streamDone } = await reader.read();
+        if (streamDone) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            if (msg.type === 'status') {
+              status.textContent = msg.msg;
+              addLog('ℹ️ ' + msg.msg, '#60a5fa');
+            } else if (msg.type === 'progress') {
+              done = msg.done;
+              if (msg.total > total) total = msg.total;
+              if (total > 0) bar.style.width = Math.round((done / total) * 100) + '%';
+              status.textContent = done + ' / ' + total + ' — ' + (msg.skipped ? '(skip) ' : (msg.isGif ? '🎞️ ' : '🖼️ ')) + msg.name;
+              if (!msg.skipped) addLog((msg.isGif ? '🎞️' : '✓') + ' ' + msg.name);
+            } else if (msg.type === 'done') {
+              bar.style.width = '100%';
+              status.textContent = '✅ Done! ' + msg.imported + ' new templates imported.';
+              addLog('✅ Complete — ' + msg.imported + ' imported, ' + (msg.total - msg.imported) + ' already existed.', '#4ade80');
+              closeBtn.disabled = false;
+              // Reload templates from server
+              await this.loadTemplates();
+              this.renderTemplatesPage();
+            } else if (msg.type === 'error') {
+              status.textContent = '❌ ' + msg.msg;
+              addLog('❌ ' + msg.msg, '#f87171');
+              closeBtn.disabled = false;
+            }
+          } catch (e) { /* ignore parse errors on partial lines */ }
+        }
+      }
+    } catch (e) {
+      status.textContent = '❌ Connection failed: ' + e.message;
+      closeBtn.disabled = false;
     }
   },
 
