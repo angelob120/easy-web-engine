@@ -216,7 +216,6 @@ const FORMAT_TEMPLATES = [
 
 // Asset categories for organization
 const ASSET_CATEGORIES = [
-  { id: 'meme-images', name: 'Meme Images', icon: '🖼️', description: 'Scraped meme templates from imgflip' },
   { id: 'reactions', name: 'Reactions', icon: '😂', description: 'Reaction faces and memes' },
   { id: 'backgrounds', name: 'Backgrounds', icon: '🖼️', description: 'Background images and textures' },
   { id: 'screenshots', name: 'Screenshots', icon: '📱', description: 'App/web screenshots' },

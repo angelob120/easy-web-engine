@@ -144,47 +144,67 @@
     <section id="page-generate" class="page">
       <div class="page-header">
         <h2>Generate Variations</h2>
+        <p class="page-subtitle">Select headlines, meme images, templates, and colors to generate all combinations</p>
       </div>
       
-      <div class="generate-layout">
-        <div class="generate-sidebar">
-          <div class="card">
-            <h4 class="card-title">1. Select Template</h4>
-            <div id="template-selector-gen" class="template-selector"></div>
-          </div>
-          
-          <div class="card">
-            <h4 class="card-title">2. Headlines</h4>
-            <div id="headlines-section"></div>
-          </div>
-          
-          <div class="card">
-            <h4 class="card-title">3. Assets</h4>
-            <div id="asset-selection"></div>
-          </div>
+      <div class="generate-grid">
+        <!-- Step 1: Headlines -->
+        <div class="card gen-card">
+          <h4 class="card-title">1. Headlines</h4>
+          <div id="headlines-section"></div>
         </div>
         
-        <div class="generate-main">
-          <div class="card">
-            <h4 class="card-title">Preview</h4>
-            <div id="generate-preview" class="preview-container">
-              <div class="preview-placeholder">
-                <span>👆</span>
-                <p>Select a template to preview</p>
-              </div>
-            </div>
+        <!-- Step 2: Select Meme Images -->
+        <div class="card gen-card">
+          <h4 class="card-title">2. Select Meme Images <span class="selected-count" id="meme-count">0 selected</span></h4>
+          <div class="meme-search-bar">
+            <input type="text" id="gen-meme-search" placeholder="Search memes..." oninput="App.filterGenMemes(this.value)">
+            <button class="btn btn-sm btn-secondary" onclick="App.selectAllMemes()">Select All</button>
+            <button class="btn btn-sm btn-secondary" onclick="App.clearMemeSelection()">Clear</button>
           </div>
-          
-          <div class="variation-summary">
-            <div class="variation-count">
-              <span class="count-label">Variations to generate:</span>
-              <span class="count-value" id="variation-count">0</span>
-            </div>
-            <button id="generate-btn" class="btn btn-success btn-large" onclick="App.generateVariations()" disabled>
-              ⚡ Generate All Variations
-            </button>
+          <div id="meme-selection-grid" class="meme-select-grid"></div>
+        </div>
+        
+        <!-- Step 3: Select Templates -->
+        <div class="card gen-card">
+          <h4 class="card-title">3. Select Templates <span class="selected-count" id="template-count">0 selected</span></h4>
+          <div class="template-select-actions">
+            <button class="btn btn-sm btn-secondary" onclick="App.selectAllTemplates()">Select All</button>
+            <button class="btn btn-sm btn-secondary" onclick="App.clearTemplateSelection()">Clear</button>
+          </div>
+          <div id="template-selector-gen" class="template-multi-select"></div>
+        </div>
+        
+        <!-- Step 4: Background Color -->
+        <div class="card gen-card">
+          <h4 class="card-title">4. Background Color</h4>
+          <div id="color-selection" class="color-picker-grid">
+            <div class="color-option selected" data-color="#000000" onclick="App.selectBgColor('#000000')" style="background:#000000"></div>
+            <div class="color-option" data-color="#1a1a2e" onclick="App.selectBgColor('#1a1a2e')" style="background:#1a1a2e"></div>
+            <div class="color-option" data-color="#0f0f23" onclick="App.selectBgColor('#0f0f23')" style="background:#0f0f23"></div>
+            <div class="color-option" data-color="#1f1f1f" onclick="App.selectBgColor('#1f1f1f')" style="background:#1f1f1f"></div>
+            <div class="color-option" data-color="#2d1b4e" onclick="App.selectBgColor('#2d1b4e')" style="background:#2d1b4e"></div>
+            <div class="color-option" data-color="#1b2d4e" onclick="App.selectBgColor('#1b2d4e')" style="background:#1b2d4e"></div>
+            <div class="color-option" data-color="#4e1b1b" onclick="App.selectBgColor('#4e1b1b')" style="background:#4e1b1b"></div>
+            <div class="color-option" data-color="#1b4e2d" onclick="App.selectBgColor('#1b4e2d')" style="background:#1b4e2d"></div>
           </div>
         </div>
+      </div>
+      
+      <!-- Summary & Generate -->
+      <div class="generate-summary-bar">
+        <div class="summary-stats">
+          <div class="summary-stat"><span id="sum-headlines">0</span> Headlines</div>
+          <div class="summary-stat">×</div>
+          <div class="summary-stat"><span id="sum-memes">0</span> Images</div>
+          <div class="summary-stat">×</div>
+          <div class="summary-stat"><span id="sum-templates">0</span> Templates</div>
+          <div class="summary-stat">=</div>
+          <div class="summary-stat total"><span id="variation-count">0</span> Variations</div>
+        </div>
+        <button id="generate-btn" class="btn btn-success btn-large" onclick="App.generateVariations()" disabled>
+          ⚡ Generate All Variations
+        </button>
       </div>
     </section>
 

@@ -45,14 +45,23 @@ const TemplateRenderer = {
   },
 
   // Main render function
-  async renderToCanvas(template, content, assets) {
+  async renderToCanvas(template, content, assets, bgColor) {
     const w = CANVAS_WIDTH;
     const h = CANVAS_HEIGHT;
     this.canvas.width = w;
     this.canvas.height = h;
     this.ctx.clearRect(0, 0, w, h);
+    
+    // Store bgColor for use in renderers
+    this.currentBgColor = bgColor || '#000000';
 
-    // Render based on template
+    // Check if it's an imgflip-type template first
+    if (template.type === 'imgflip' || template.imgflipId) {
+      await this.renderImgflip(w, h, template, content, assets);
+      return this.canvas.toDataURL('image/png');
+    }
+
+    // Render based on template id
     switch (template.id) {
       case 'drake':
         await this.renderDrake(w, h, content, assets);
@@ -90,16 +99,9 @@ const TemplateRenderer = {
       case 'hot-take':
         await this.renderHotTake(w, h, content, assets);
         break;
-      case 'imgflip':
-        await this.renderImgflip(w, h, template, content, assets);
-        break;
       default:
-        // For any imgflip-imported template (type === 'imgflip'), use the imgflip renderer
-        if (template.type === 'imgflip' || template.imgflipId) {
-          await this.renderImgflip(w, h, template, content, assets);
-        } else {
-          this.renderPlaceholder(w, h, template.name);
-        }
+        // For any other template, try imgflip rendering with background asset
+        await this.renderImgflip(w, h, template, content, assets);
     }
 
     return this.canvas.toDataURL('image/png');
@@ -216,24 +218,22 @@ const TemplateRenderer = {
     this.ctx.closePath();
   },
 
-  // Imgflip template renderer — draws the locally stored image + text overlays
-  // Can also accept a background asset to use instead of the template's default image
+  // Imgflip template renderer — draws the background image + text overlays
+  // assets.background can override the template's localImagePath
   async renderImgflip(w, h, template, content, assets) {
     const ctx = this.ctx;
-
-    // Priority: 1) selected background asset, 2) template's localImagePath
+    
+    // Determine image URL: priority is assets.background > template.localImagePath
     let imageUrl = null;
     
-    // Check if there's a background asset selected
     if (assets && assets.background) {
+      // Use the selected background asset
       imageUrl = assets.background.dataUrl || assets.background.serverUrl;
       if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
         imageUrl = window.location.origin + imageUrl;
       }
-    }
-    
-    // Fallback to template's local image
-    if (!imageUrl && template.localImagePath) {
+    } else if (template.localImagePath) {
+      // Fall back to template's stored image
       imageUrl = window.location.origin + template.localImagePath;
     }
 
@@ -244,18 +244,19 @@ const TemplateRenderer = {
         img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
         img.onerror = () => {
-          console.warn('Failed to load image:', imageUrl);
+          console.warn('Failed to load meme image:', imageUrl);
           resolve(null);
         };
         img.src = imageUrl;
       });
     }
 
-    if (bgImg) {
-      // Black background
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, w, h);
+    // Use background color (from selection or default)
+    const bgColor = this.currentBgColor || '#000000';
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, w, h);
 
+    if (bgImg) {
       // Scale image to fill canvas width, center vertically
       const scale = w / bgImg.width;
       const dw = w;
@@ -264,7 +265,7 @@ const TemplateRenderer = {
       ctx.drawImage(bgImg, 0, dy, dw, dh);
 
       // Overlay text zones — split image into equal horizontal bands
-      const zones = template.zones || [];
+      const zones = template.zones || [{ id: 'text1', position: 'center' }];
       const fontSize = Math.max(52, Math.min(90, Math.floor(dw / (zones.length > 2 ? 12 : 9))));
 
       zones.forEach((zone, i) => {
@@ -276,8 +277,8 @@ const TemplateRenderer = {
         const padding = fontSize * 0.3;
 
         // Semi-transparent strip behind text for readability
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.fillRect(0, bandY, w, bandH * 0.55);
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, bandY, w, bandH * 0.6);
 
         this.drawText(text.toUpperCase(), w / 2, bandY + padding, dw - 60, {
           fontSize,
@@ -292,7 +293,28 @@ const TemplateRenderer = {
       });
 
     } else {
-      this.renderPlaceholder(w, h, template.name);
+      // No image - just render text on solid color background
+      const zones = template.zones || [{ id: 'text1', position: 'center' }];
+      const fontSize = 72;
+      
+      zones.forEach((zone, i) => {
+        const text = content[zone.id] || '';
+        if (!text) return;
+        
+        const bandH = h / zones.length;
+        const bandY = i * bandH + bandH / 2 - fontSize / 2;
+        
+        this.drawText(text.toUpperCase(), w / 2, bandY, w - 80, {
+          fontSize,
+          color: '#FFFFFF',
+          stroke: '#000000',
+          strokeWidth: 5,
+          fontWeight: 'bold',
+          align: 'center',
+          lineHeight: 1.2,
+          maxLines: 4
+        });
+      });
     }
   },
 

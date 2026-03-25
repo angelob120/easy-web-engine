@@ -121,26 +121,15 @@ const App = {
   // DASHBOARD
   // ============================================
 
-  async renderDashboard() {
+  renderDashboard() {
     const visibleTemplates = this.templates.filter(t => t.visible !== false);
-    const imgflipTemplates = this.templates.filter(t => t.type === 'imgflip' || t.imgflipId);
-    
-    // Load meme stats from server
-    let memeStats = { totalFiles: 0, images: 0, gifs: 0 };
-    try {
-      const res = await fetch('/api/assets/stats');
-      memeStats = await res.json();
-    } catch (e) { console.log('Could not load meme stats'); }
-    
-    document.getElementById('stat-assets').textContent = AppState.assets.length + (memeStats.totalFiles > 0 ? ' + ' + memeStats.totalFiles : '');
+    document.getElementById('stat-assets').textContent = AppState.assets.length;
     document.getElementById('stat-templates').textContent = visibleTemplates.length;
     document.getElementById('stat-headlines').textContent = this.headlines.length;
     document.getElementById('stat-queue').textContent = this.exportQueue.length;
     const headlines = Math.max(1, this.headlines.length);
-    const assets = Math.max(1, AppState.assets.length + memeStats.totalFiles);
+    const assets = Math.max(1, AppState.assets.length);
     document.getElementById('stat-variations').textContent = (headlines * assets * visibleTemplates.length).toLocaleString();
-    
-    // Recent templates
     document.getElementById('recent-templates').innerHTML = visibleTemplates.slice(0, 6).map(t =>
       '<div class="template-mini" onclick="App.selectTemplateAndGenerate(\'' + t.id + '\')">' +
         '<div class="template-mini-icon">' + t.icon + '</div>' +
@@ -150,53 +139,6 @@ const App = {
         '</div>' +
       '</div>'
     ).join('');
-    
-    // Add meme library section if it doesn't exist
-    let memeSection = document.getElementById('meme-library-section');
-    if (!memeSection) {
-      const dashboardPage = document.getElementById('page-dashboard');
-      const section = document.createElement('div');
-      section.className = 'card';
-      section.id = 'meme-library-section';
-      dashboardPage.appendChild(section);
-      memeSection = section;
-    }
-    
-    memeSection.innerHTML = 
-      '<h3 class="card-title">🖼️ Meme Library</h3>' +
-      '<div class="meme-stats-row">' +
-        '<div class="meme-stat"><span class="meme-stat-value">' + memeStats.totalFiles + '</span><span class="meme-stat-label">Total Images</span></div>' +
-        '<div class="meme-stat"><span class="meme-stat-value">' + memeStats.images + '</span><span class="meme-stat-label">Memes</span></div>' +
-        '<div class="meme-stat"><span class="meme-stat-value">' + memeStats.gifs + '</span><span class="meme-stat-label">GIFs</span></div>' +
-        '<div class="meme-stat"><span class="meme-stat-value">' + imgflipTemplates.length + '</span><span class="meme-stat-label">Templates</span></div>' +
-        '<div class="meme-stat"><span class="meme-stat-value">' + (memeStats.totalSizeMB || '0') + ' MB</span><span class="meme-stat-label">Storage</span></div>' +
-      '</div>' +
-      '<div class="meme-library-actions">' +
-        (memeStats.totalFiles === 0 
-          ? '<p class="hint">No meme images scraped yet. Click below to import from imgflip.</p>'
-          : '<p class="hint">Meme images are stored on your Railway volume and ready to use!</p>') +
-        '<div class="action-btns">' +
-          '<button class="btn btn-purple" onclick="App.importAllImgflip()">🌐 Import All from Imgflip</button>' +
-          '<button class="btn btn-secondary" onclick="App.navigateTo(\'assets\')">📁 Browse Assets</button>' +
-          '<button class="btn btn-secondary" onclick="App.migrateImgflipTemplates()">🔧 Fix Templates</button>' +
-        '</div>' +
-      '</div>';
-  },
-
-  async migrateImgflipTemplates() {
-    try {
-      const res = await fetch('/api/templates/migrate-imgflip', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        alert('Migrated ' + data.migrated + ' templates. Reloading...');
-        await this.loadTemplates();
-        this.renderDashboard();
-      } else {
-        alert('Migration failed: ' + data.error);
-      }
-    } catch (e) {
-      alert('Error: ' + e.message);
-    }
   },
 
   selectTemplateAndGenerate(id) {
@@ -208,65 +150,20 @@ const App = {
   // ASSETS PAGE
   // ============================================
 
-  memeImages: [], // Cache for loaded meme images from server
-
-  async renderAssetsPage() {
+  renderAssetsPage() {
     const container = document.getElementById('assets-grid');
-    
-    // First, load meme images from server if not cached
-    if (this.memeImages.length === 0) {
-      await this.loadMemeImages();
+    if (AppState.assets.length === 0) {
+      container.innerHTML = '<div class="empty-state full-width"><div class="icon">📁</div><p>No assets uploaded yet</p><label class="btn btn-pink">📤 Upload Assets<input type="file" multiple accept="image/*,video/*" onchange="App.handleAssetUpload(this.files)" hidden></label></div>';
+      return;
     }
-    
-    // Group user assets
     const grouped = {};
     ASSET_CATEGORIES.forEach(cat => grouped[cat.id] = []);
     AppState.assets.forEach(asset => {
       const cat = asset.category || 'misc';
       if (grouped[cat]) grouped[cat].push(asset); else grouped['misc'].push(asset);
     });
-    
-    // Add meme images to the meme-images category
-    grouped['meme-images'] = this.memeImages;
-    
-    const totalAssets = AppState.assets.length + this.memeImages.length;
-    
-    let html = '<div class="assets-header">' +
-      '<div class="assets-actions">' +
-        '<label class="btn btn-pink">📤 Upload Assets<input type="file" multiple accept="image/*,video/*" onchange="App.handleAssetUpload(this.files)" hidden></label>' +
-        '<button class="btn btn-secondary" onclick="App.refreshMemeImages()">🔄 Refresh Meme Library</button>' +
-      '</div>' +
-      '<span class="asset-count">' + totalAssets + ' assets (' + this.memeImages.length + ' meme images)</span>' +
-    '</div>';
-    
-    // Render meme images category first (if any exist)
-    if (this.memeImages.length > 0) {
-      html += '<div class="asset-category">' +
-        '<h3>🖼️ Meme Images Library (' + this.memeImages.length + ')</h3>' +
-        '<p class="category-desc">Scraped from imgflip - use these as backgrounds for your memes</p>' +
-        '<div class="meme-filter"><input type="text" id="meme-search" placeholder="Search memes..." oninput="App.filterMemeImages(this.value)"></div>' +
-        '<div class="asset-grid meme-grid" id="meme-images-grid">';
-      
-      this.memeImages.slice(0, 50).forEach(meme => {
-        html += '<div class="asset-card meme-card" data-name="' + meme.name.toLowerCase() + '" onclick="App.useMemeAsAsset(\'' + meme.id + '\')">' +
-          '<div class="asset-preview">' +
-            '<img src="' + meme.url + '" alt="' + meme.name + '" loading="lazy">' +
-            (meme.isGif ? '<span class="gif-badge">GIF</span>' : '') +
-          '</div>' +
-          '<div class="asset-info">' +
-            '<span class="asset-name">' + meme.name.substring(0, 25) + '</span>' +
-          '</div>' +
-        '</div>';
-      });
-      
-      if (this.memeImages.length > 50) {
-        html += '<div class="load-more"><button class="btn btn-secondary" onclick="App.showAllMemeImages()">Show All (' + this.memeImages.length + ')</button></div>';
-      }
-      html += '</div></div>';
-    }
-    
-    // Render user-uploaded assets by category
-    ASSET_CATEGORIES.filter(cat => cat.id !== 'meme-images').forEach(cat => {
+    let html = '<div class="assets-header"><label class="btn btn-pink">📤 Upload More<input type="file" multiple accept="image/*,video/*" onchange="App.handleAssetUpload(this.files)" hidden></label><span class="asset-count">' + AppState.assets.length + ' assets</span></div>';
+    ASSET_CATEGORIES.forEach(cat => {
       if (grouped[cat.id].length === 0) return;
       html += '<div class="asset-category"><h3>' + cat.icon + ' ' + cat.name + ' (' + grouped[cat.id].length + ')</h3><div class="asset-grid">';
       grouped[cat.id].forEach(asset => {
@@ -274,102 +171,12 @@ const App = {
           (asset.type === 'video' ? '<video src="' + asset.dataUrl + '" muted></video><span class="video-badge">🎬</span>' : '<img src="' + asset.dataUrl + '" alt="' + asset.name + '">') +
           '</div><div class="asset-info"><span class="asset-name">' + asset.name + '</span><button class="asset-delete" onclick="App.deleteAsset(\'' + asset.id + '\')">🗑️</button></div>' +
           '<select class="asset-category-select" onchange="App.updateAssetCategory(\'' + asset.id + '\', this.value)">' +
-          ASSET_CATEGORIES.filter(c => c.id !== 'meme-images').map(c => '<option value="' + c.id + '"' + (asset.category === c.id ? ' selected' : '') + '>' + c.icon + ' ' + c.name + '</option>').join('') +
+          ASSET_CATEGORIES.map(c => '<option value="' + c.id + '"' + (asset.category === c.id ? ' selected' : '') + '>' + c.icon + ' ' + c.name + '</option>').join('') +
           '</select></div>';
       });
       html += '</div></div>';
     });
-    
-    if (totalAssets === 0) {
-      html = '<div class="empty-state full-width">' +
-        '<div class="icon">📁</div>' +
-        '<p>No assets yet</p>' +
-        '<div class="empty-actions">' +
-          '<label class="btn btn-pink">📤 Upload Assets<input type="file" multiple accept="image/*,video/*" onchange="App.handleAssetUpload(this.files)" hidden></label>' +
-          '<button class="btn btn-secondary" onclick="App.goToScraper()">🔄 Import from Imgflip</button>' +
-        '</div>' +
-      '</div>';
-    }
-    
     container.innerHTML = html;
-  },
-
-  async loadMemeImages() {
-    try {
-      const res = await fetch('/api/assets/memes');
-      const data = await res.json();
-      this.memeImages = data.assets || [];
-    } catch (e) {
-      console.error('Failed to load meme images:', e);
-      this.memeImages = [];
-    }
-  },
-
-  async refreshMemeImages() {
-    this.memeImages = [];
-    await this.loadMemeImages();
-    this.renderAssetsPage();
-  },
-
-  filterMemeImages(query) {
-    const grid = document.getElementById('meme-images-grid');
-    if (!grid) return;
-    const cards = grid.querySelectorAll('.meme-card');
-    const q = query.toLowerCase();
-    cards.forEach(card => {
-      const name = card.dataset.name || '';
-      card.style.display = name.includes(q) ? '' : 'none';
-    });
-  },
-
-  showAllMemeImages() {
-    const grid = document.getElementById('meme-images-grid');
-    if (!grid) return;
-    
-    // Clear and show all
-    let html = '';
-    this.memeImages.forEach(meme => {
-      html += '<div class="asset-card meme-card" data-name="' + meme.name.toLowerCase() + '" onclick="App.useMemeAsAsset(\'' + meme.id + '\')">' +
-        '<div class="asset-preview">' +
-          '<img src="' + meme.url + '" alt="' + meme.name + '" loading="lazy">' +
-          (meme.isGif ? '<span class="gif-badge">GIF</span>' : '') +
-        '</div>' +
-        '<div class="asset-info">' +
-          '<span class="asset-name">' + meme.name.substring(0, 25) + '</span>' +
-        '</div>' +
-      '</div>';
-    });
-    grid.innerHTML = html;
-  },
-
-  useMemeAsAsset(memeId) {
-    const meme = this.memeImages.find(m => m.id === memeId);
-    if (!meme) return;
-    
-    // Convert server meme to usable asset format
-    const asset = {
-      id: memeId,
-      name: meme.name,
-      type: 'image',
-      category: 'meme-images',
-      dataUrl: window.location.origin + meme.url,  // Full URL for canvas drawing
-      serverUrl: meme.url,
-      isGif: meme.isGif,
-      isMemeImage: true
-    };
-    
-    // Check if already added
-    if (!AppState.assets.find(a => a.id === memeId)) {
-      AppState.assets.push(asset);
-      this.saveState();
-    }
-    
-    alert('Added "' + meme.name + '" to your assets! Go to Generate to use it.');
-  },
-
-  goToScraper() {
-    this.navigateTo('dashboard');
-    // Scroll to or highlight the scraper section if it exists
   },
 
   async handleAssetUpload(files) {
@@ -902,32 +709,23 @@ const App = {
   },
 
   // ============================================
-  // GENERATE PAGE
+  // GENERATE PAGE - Multi-Selection Workflow
   // ============================================
 
-  renderGeneratePage() {
-    const visibleTemplates = this.templates.filter(t => t.visible !== false);
-    const templateSelector = document.getElementById('template-selector-gen');
-    if (visibleTemplates.length === 0) {
-      templateSelector.innerHTML = '<p class="hint">No templates visible. <a href="#" onclick="App.navigateTo(\'templates\')">Manage templates →</a></p>';
-    } else {
-      templateSelector.innerHTML = visibleTemplates.map(t =>
-        '<div class="template-option ' + (this.selectedTemplate?.id === t.id ? 'selected' : '') + '" onclick="App.selectTemplate(\'' + t.id + '\')">' +
-          '<span class="template-option-icon">' + t.icon + '</span>' +
-          '<div class="template-option-info"><strong>' + t.name + '</strong><small>' + t.category + '</small></div>' +
-        '</div>'
-      ).join('');
-    }
-    this.renderHeadlinesSection();
-    this.renderAssetSelection();
-    this.updateVariationCount();
-    document.getElementById('generate-btn').disabled = !this.selectedTemplate || this.headlines.length === 0;
-  },
+  selectedMemes: [],      // Array of selected meme image IDs
+  selectedTemplates: [],  // Array of selected template IDs  
+  selectedBgColor: '#000000',
 
-  selectTemplate(id) {
-    this.selectedTemplate = this.templates.find(t => t.id === id);
-    this.renderGeneratePage();
-    this.updatePreview();
+  async renderGeneratePage() {
+    // Load meme images if not cached
+    if (this.memeImages.length === 0) {
+      await this.loadMemeImages();
+    }
+    
+    this.renderHeadlinesSection();
+    this.renderMemeSelection();
+    this.renderTemplateSelection();
+    this.updateVariationCount();
   },
 
   renderHeadlinesSection() {
@@ -938,7 +736,7 @@ const App = {
         '<button class="btn btn-secondary" onclick="App.updateHeadlines()">Update Headlines</button>' +
       '</div>' +
       '<div class="headlines-list">' +
-        this.headlines.map((h, i) => '<div class="headline-tag"><span>' + h + '</span><button onclick="App.removeHeadline(' + i + ')">×</button></div>').join('') +
+        this.headlines.map((h, i) => '<div class="headline-tag"><span>' + h.substring(0, 40) + (h.length > 40 ? '...' : '') + '</span><button onclick="App.removeHeadline(' + i + ')">×</button></div>').join('') +
       '</div>' +
       '<div class="headline-count">' + this.headlines.length + ' headlines</div>';
   },
@@ -946,232 +744,259 @@ const App = {
   updateHeadlines() {
     const input = document.getElementById('headline-input');
     this.headlines = input.value.split('\n').map(h => h.trim()).filter(h => h.length > 0);
-    this.saveState(); this.renderHeadlinesSection(); this.updateVariationCount();
+    this.saveState(); 
+    this.renderHeadlinesSection(); 
+    this.updateVariationCount();
   },
 
   removeHeadline(index) {
     this.headlines.splice(index, 1);
-    this.saveState(); this.renderHeadlinesSection(); this.updateVariationCount();
+    this.saveState(); 
+    this.renderHeadlinesSection(); 
+    this.updateVariationCount();
   },
 
-  renderAssetSelection() {
-    const container = document.getElementById('asset-selection');
-    if (!this.selectedTemplate) { container.innerHTML = '<p class="hint">Select a template to see asset slots</p>'; return; }
-    let html = '<h4>Asset Slots for ' + this.selectedTemplate.name + '</h4><div class="asset-slots">';
-    this.selectedTemplate.assetSlots.forEach(slot => {
-      html += '<div class="asset-slot"><label>' + slot.label + (slot.required ? ' <span class="required">*</span>' : '') + '</label>' +
-        '<div class="asset-slot-picker" onclick="App.openAssetPicker(\'' + slot.id + '\')">' +
-          (this.selectedAssets[slot.id] ? '<img src="' + this.selectedAssets[slot.id].dataUrl + '" alt="Selected">' : '<span class="placeholder">+ Select asset</span>') +
-        '</div>' +
-        '<div class="asset-slot-actions"><label class="btn-small">All matching<input type="checkbox" id="slot-all-' + slot.id + '"' + (this.selectedAssets[slot.id + '_all'] ? ' checked' : '') + ' onchange="App.toggleAllAssets(\'' + slot.id + '\', this.checked)"></label></div>' +
-      '</div>';
-    });
-    html += '</div>';
-    container.innerHTML = html;
-  },
-
-  toggleAllAssets(slotId, useAll) { this.selectedAssets[slotId + '_all'] = useAll; this.updateVariationCount(); },
-
-  openAssetPicker(slotId) {
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay active';
-    modal.id = 'asset-picker-modal';
-    
-    // Build tabs for user assets vs meme library
-    const userAssets = AppState.assets.filter(a => !a.isMemeImage);
-    const memeAssets = this.memeImages || [];
-    
-    modal.innerHTML = 
-      '<div class="modal modal-large">' +
-        '<div class="modal-header">' +
-          '<h3>Select Asset for ' + slotId + '</h3>' +
-          '<button class="close-btn" onclick="this.closest(\'.modal-overlay\').remove()">×</button>' +
-        '</div>' +
-        '<div class="asset-picker-tabs">' +
-          '<button class="tab-btn active" onclick="App.switchAssetTab(\'user\')">📁 Your Assets (' + userAssets.length + ')</button>' +
-          '<button class="tab-btn" onclick="App.switchAssetTab(\'memes\')">🖼️ Meme Library (' + memeAssets.length + ')</button>' +
-        '</div>' +
-        '<div class="asset-picker-search">' +
-          '<input type="text" id="asset-picker-search" placeholder="Search assets..." oninput="App.filterAssetPicker(this.value)">' +
-        '</div>' +
-        '<div class="modal-body">' +
-          '<div id="asset-picker-user" class="asset-picker-grid">' +
-            (userAssets.length === 0 
-              ? '<p class="hint">No assets uploaded yet. Go to Assets tab to upload.</p>' 
-              : userAssets.map(a => 
-                  '<div class="asset-picker-item" data-name="' + a.name.toLowerCase() + '" onclick="App.selectAssetForSlot(\'' + slotId + '\', \'' + a.id + '\')">' +
-                    '<img src="' + a.dataUrl + '" alt="' + a.name + '">' +
-                    '<span>' + a.name.substring(0, 20) + '</span>' +
-                  '</div>'
-                ).join('')) +
-          '</div>' +
-          '<div id="asset-picker-memes" class="asset-picker-grid" style="display:none">' +
-            (memeAssets.length === 0 
-              ? '<p class="hint">No meme images scraped yet. Go to Templates tab and use "Import from Imgflip".</p>' 
-              : memeAssets.slice(0, 100).map(m => 
-                  '<div class="asset-picker-item meme-item" data-name="' + m.name.toLowerCase() + '" onclick="App.selectMemeForSlot(\'' + slotId + '\', \'' + m.id + '\')">' +
-                    '<img src="' + m.url + '" alt="' + m.name + '" loading="lazy">' +
-                    (m.isGif ? '<span class="gif-badge">GIF</span>' : '') +
-                    '<span>' + m.name.substring(0, 20) + '</span>' +
-                  '</div>'
-                ).join('') +
-              (memeAssets.length > 100 ? '<div class="load-more-picker"><button class="btn btn-secondary" onclick="App.loadMoreMemeAssets(\'' + slotId + '\')">Load More (' + (memeAssets.length - 100) + ' more)</button></div>' : '')) +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(modal);
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-  },
-
-  switchAssetTab(tab) {
-    const userGrid = document.getElementById('asset-picker-user');
-    const memeGrid = document.getElementById('asset-picker-memes');
-    const tabs = document.querySelectorAll('.asset-picker-tabs .tab-btn');
-    
-    tabs.forEach((t, i) => {
-      t.classList.toggle('active', (tab === 'user' && i === 0) || (tab === 'memes' && i === 1));
-    });
-    
-    if (tab === 'user') {
-      userGrid.style.display = '';
-      memeGrid.style.display = 'none';
-    } else {
-      userGrid.style.display = 'none';
-      memeGrid.style.display = '';
+  renderMemeSelection() {
+    const container = document.getElementById('meme-selection-grid');
+    if (this.memeImages.length === 0) {
+      container.innerHTML = '<p class="hint">No meme images yet. Go to Dashboard and click "Import All from Imgflip".</p>';
+      return;
     }
+    
+    // Show first 60 memes with selection state
+    container.innerHTML = this.memeImages.slice(0, 60).map(m => 
+      '<div class="meme-select-item ' + (this.selectedMemes.includes(m.id) ? 'selected' : '') + '" ' +
+           'data-id="' + m.id + '" data-name="' + m.name.toLowerCase() + '" onclick="App.toggleMemeSelection(\'' + m.id + '\')">' +
+        '<img src="' + m.url + '" alt="' + m.name + '" loading="lazy">' +
+        (m.isGif ? '<span class="gif-badge">GIF</span>' : '') +
+        '<div class="select-check">' + (this.selectedMemes.includes(m.id) ? '✓' : '') + '</div>' +
+        '<span class="meme-name">' + m.name.substring(0, 18) + '</span>' +
+      '</div>'
+    ).join('') + 
+    (this.memeImages.length > 60 ? '<div class="load-more"><button class="btn btn-secondary" onclick="App.showAllGenMemes()">Show All (' + this.memeImages.length + ')</button></div>' : '');
+    
+    document.getElementById('meme-count').textContent = this.selectedMemes.length + ' selected';
   },
 
-  filterAssetPicker(query) {
+  toggleMemeSelection(memeId) {
+    const idx = this.selectedMemes.indexOf(memeId);
+    if (idx >= 0) {
+      this.selectedMemes.splice(idx, 1);
+    } else {
+      this.selectedMemes.push(memeId);
+    }
+    // Update just the clicked item without re-rendering entire grid
+    const item = document.querySelector('.meme-select-item[data-id="' + memeId + '"]');
+    if (item) {
+      item.classList.toggle('selected', this.selectedMemes.includes(memeId));
+      item.querySelector('.select-check').textContent = this.selectedMemes.includes(memeId) ? '✓' : '';
+    }
+    document.getElementById('meme-count').textContent = this.selectedMemes.length + ' selected';
+    this.updateVariationCount();
+  },
+
+  selectAllMemes() {
+    this.selectedMemes = this.memeImages.map(m => m.id);
+    this.renderMemeSelection();
+    this.updateVariationCount();
+  },
+
+  clearMemeSelection() {
+    this.selectedMemes = [];
+    this.renderMemeSelection();
+    this.updateVariationCount();
+  },
+
+  filterGenMemes(query) {
     const q = query.toLowerCase();
-    document.querySelectorAll('.asset-picker-item').forEach(item => {
+    document.querySelectorAll('.meme-select-item').forEach(item => {
       const name = item.dataset.name || '';
       item.style.display = name.includes(q) ? '' : 'none';
     });
   },
 
-  loadMoreMemeAssets(slotId) {
-    const grid = document.getElementById('asset-picker-memes');
-    if (!grid) return;
-    
-    // Show all memes
-    grid.innerHTML = this.memeImages.map(m => 
-      '<div class="asset-picker-item meme-item" data-name="' + m.name.toLowerCase() + '" onclick="App.selectMemeForSlot(\'' + slotId + '\', \'' + m.id + '\')">' +
+  showAllGenMemes() {
+    const container = document.getElementById('meme-selection-grid');
+    container.innerHTML = this.memeImages.map(m => 
+      '<div class="meme-select-item ' + (this.selectedMemes.includes(m.id) ? 'selected' : '') + '" ' +
+           'data-id="' + m.id + '" data-name="' + m.name.toLowerCase() + '" onclick="App.toggleMemeSelection(\'' + m.id + '\')">' +
         '<img src="' + m.url + '" alt="' + m.name + '" loading="lazy">' +
         (m.isGif ? '<span class="gif-badge">GIF</span>' : '') +
-        '<span>' + m.name.substring(0, 20) + '</span>' +
+        '<div class="select-check">' + (this.selectedMemes.includes(m.id) ? '✓' : '') + '</div>' +
+        '<span class="meme-name">' + m.name.substring(0, 18) + '</span>' +
       '</div>'
     ).join('');
   },
 
-  selectMemeForSlot(slotId, memeId) {
-    const meme = this.memeImages.find(m => m.id === memeId);
-    if (!meme) return;
+  renderTemplateSelection() {
+    const container = document.getElementById('template-selector-gen');
+    const visibleTemplates = this.templates.filter(t => t.visible !== false);
     
-    // Create asset from meme
-    const asset = {
-      id: memeId,
-      name: meme.name,
-      type: 'image',
-      category: 'meme-images',
-      dataUrl: window.location.origin + meme.url,
-      serverUrl: meme.url,
-      isGif: meme.isGif,
-      isMemeImage: true
-    };
+    if (visibleTemplates.length === 0) {
+      container.innerHTML = '<p class="hint">No templates. Go to Templates tab to create or import.</p>';
+      return;
+    }
     
-    this.selectedAssets[slotId] = asset;
-    document.querySelector('.modal-overlay')?.remove();
-    this.renderAssetSelection();
-    this.updatePreview();
+    container.innerHTML = visibleTemplates.map(t =>
+      '<div class="template-select-item ' + (this.selectedTemplates.includes(t.id) ? 'selected' : '') + '" onclick="App.toggleTemplateSelection(\'' + t.id + '\')">' +
+        '<span class="tpl-icon">' + t.icon + '</span>' +
+        '<div class="tpl-info"><strong>' + t.name + '</strong><small>' + t.category + '</small></div>' +
+        '<div class="select-check">' + (this.selectedTemplates.includes(t.id) ? '✓' : '') + '</div>' +
+      '</div>'
+    ).join('');
+    
+    document.getElementById('template-count').textContent = this.selectedTemplates.length + ' selected';
+  },
+
+  toggleTemplateSelection(templateId) {
+    const idx = this.selectedTemplates.indexOf(templateId);
+    if (idx >= 0) {
+      this.selectedTemplates.splice(idx, 1);
+    } else {
+      this.selectedTemplates.push(templateId);
+    }
+    const item = document.querySelector('.template-select-item[onclick*="' + templateId + '"]');
+    if (item) {
+      item.classList.toggle('selected', this.selectedTemplates.includes(templateId));
+      item.querySelector('.select-check').textContent = this.selectedTemplates.includes(templateId) ? '✓' : '';
+    }
+    document.getElementById('template-count').textContent = this.selectedTemplates.length + ' selected';
     this.updateVariationCount();
   },
 
-  selectAssetForSlot(slotId, assetId) {
-    this.selectedAssets[slotId] = AppState.assets.find(a => a.id === assetId);
-    document.querySelector('.modal-overlay')?.remove();
-    this.renderAssetSelection(); this.updatePreview(); this.updateVariationCount();
+  selectAllTemplates() {
+    this.selectedTemplates = this.templates.filter(t => t.visible !== false).map(t => t.id);
+    this.renderTemplateSelection();
+    this.updateVariationCount();
+  },
+
+  clearTemplateSelection() {
+    this.selectedTemplates = [];
+    this.renderTemplateSelection();
+    this.updateVariationCount();
+  },
+
+  selectBgColor(color) {
+    this.selectedBgColor = color;
+    document.querySelectorAll('.color-option').forEach(el => {
+      el.classList.toggle('selected', el.dataset.color === color);
+    });
   },
 
   updateVariationCount() {
-    const headlines = this.headlines.length || 1;
-    let assetCombinations = 1;
-    if (this.selectedTemplate) {
-      this.selectedTemplate.assetSlots.forEach(slot => {
-        if (this.selectedAssets[slot.id + '_all']) {
-          const matching = AppState.assets.filter(a => a.category === this.detectSlotCategory(slot.id)).length;
-          assetCombinations *= Math.max(1, matching);
-        }
-      });
-    }
-    const total = headlines * assetCombinations;
-    document.getElementById('variation-count').textContent = total.toLocaleString();
-    document.getElementById('generate-btn').disabled = total === 0 || !this.selectedTemplate;
-  },
-
-  detectSlotCategory(slotId) {
-    if (slotId.includes('reaction')) return 'reactions';
-    if (slotId.includes('background') || slotId.includes('bg')) return 'backgrounds';
-    if (slotId.includes('screenshot')) return 'screenshots';
-    if (slotId.includes('brain')) return 'brains';
-    return 'misc';
-  },
-
-  async updatePreview() {
-    if (!this.selectedTemplate) return;
-    const content = {};
-    if (this.headlines.length > 0) {
-      this.selectedTemplate.zones.forEach(zone => { content[zone.id] = this.headlines[0]; });
-    }
-    const dataUrl = await TemplateRenderer.renderToCanvas(this.selectedTemplate, content, this.selectedAssets);
-    document.getElementById('generate-preview').innerHTML = '<img src="' + dataUrl + '" alt="Preview">';
+    const h = this.headlines.length;
+    const m = this.selectedMemes.length;
+    const t = this.selectedTemplates.length;
+    const total = h * Math.max(1, m) * Math.max(1, t);
+    
+    // Update summary stats
+    const sumH = document.getElementById('sum-headlines');
+    const sumM = document.getElementById('sum-memes');
+    const sumT = document.getElementById('sum-templates');
+    const countEl = document.getElementById('variation-count');
+    const btn = document.getElementById('generate-btn');
+    
+    if (sumH) sumH.textContent = h;
+    if (sumM) sumM.textContent = m || 1;
+    if (sumT) sumT.textContent = t || 1;
+    if (countEl) countEl.textContent = total.toLocaleString();
+    if (btn) btn.disabled = h === 0 || (m === 0 && t === 0);
   },
 
   async generateVariations() {
-    if (!this.selectedTemplate || this.headlines.length === 0) return;
+    if (this.headlines.length === 0) {
+      alert('Add at least one headline!');
+      return;
+    }
+    if (this.selectedMemes.length === 0 && this.selectedTemplates.length === 0) {
+      alert('Select at least one meme image or template!');
+      return;
+    }
+    
     const modal = document.getElementById('generate-modal');
     const progressBar = document.getElementById('generate-progress');
     const statusText = document.getElementById('generate-status');
     modal.classList.add('active');
     this.generatedVariations = [];
+    
+    // Get selected meme objects
+    const selectedMemeObjs = this.selectedMemes.map(id => this.memeImages.find(m => m.id === id)).filter(Boolean);
+    
+    // Get selected template objects
+    const selectedTemplateObjs = this.selectedTemplates.map(id => this.templates.find(t => t.id === id)).filter(Boolean);
+    
+    // If no templates selected, use a generic text overlay template
+    if (selectedTemplateObjs.length === 0) {
+      // Use the first imgflip-style template or create a basic one
+      const basicTemplate = this.templates.find(t => t.type === 'imgflip') || {
+        id: 'basic-overlay',
+        name: 'Basic Overlay',
+        zones: [{ id: 'text1', type: 'text', position: 'top', label: 'Text' }],
+        assetSlots: [{ id: 'background', label: 'Background', position: 'full' }],
+        defaultMotion: 'zoom-in'
+      };
+      selectedTemplateObjs.push(basicTemplate);
+    }
+    
+    // If no memes selected, generate without background image
+    if (selectedMemeObjs.length === 0) {
+      selectedMemeObjs.push(null); // Will use template default or solid color
+    }
+    
     const variations = [];
-    const assetCombos = this.buildAssetCombinations();
+    
+    // Build all combinations: headline × meme × template
     for (const headline of this.headlines) {
-      for (const assetCombo of assetCombos) {
-        const content = {};
-        this.selectedTemplate.zones.forEach(zone => { content[zone.id] = headline; });
-        variations.push({ id: 'var_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9), templateId: this.selectedTemplate.id, content, assets: assetCombo, duration: 5, motion: this.selectedTemplate.defaultMotion, createdAt: Date.now() });
+      for (const meme of selectedMemeObjs) {
+        for (const template of selectedTemplateObjs) {
+          const content = {};
+          template.zones.forEach(zone => { content[zone.id] = headline; });
+          
+          // Create asset with meme as background
+          const assets = {};
+          if (meme) {
+            assets.background = {
+              id: meme.id,
+              name: meme.name,
+              dataUrl: window.location.origin + meme.url,
+              serverUrl: meme.url,
+              isGif: meme.isGif
+            };
+          }
+          
+          variations.push({
+            id: 'var_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+            templateId: template.id,
+            content,
+            assets,
+            bgColor: this.selectedBgColor,
+            duration: 5,
+            motion: template.defaultMotion || 'zoom-in',
+            memeName: meme ? meme.name : 'No background',
+            templateName: template.name,
+            createdAt: Date.now()
+          });
+        }
       }
     }
+    
+    statusText.textContent = 'Generating ' + variations.length + ' variations...';
+    
     for (let i = 0; i < variations.length; i++) {
       const v = variations[i];
-      v.previewUrl = await TemplateRenderer.renderToCanvas(this.selectedTemplate, v.content, v.assets);
+      const template = this.templates.find(t => t.id === v.templateId) || selectedTemplateObjs[0];
+      v.previewUrl = await TemplateRenderer.renderToCanvas(template, v.content, v.assets, v.bgColor);
       this.generatedVariations.push(v);
       progressBar.style.width = ((i + 1) / variations.length * 100) + '%';
       statusText.textContent = 'Generated ' + (i + 1) + ' of ' + variations.length;
-      await new Promise(r => setTimeout(r, 10));
+      // Yield to UI every 5 items
+      if (i % 5 === 0) await new Promise(r => setTimeout(r, 1));
     }
-    statusText.textContent = 'Complete!';
-    await new Promise(r => setTimeout(r, 500));
+    
+    statusText.textContent = 'Complete! ' + variations.length + ' variations generated.';
+    await new Promise(r => setTimeout(r, 800));
     modal.classList.remove('active');
     this.navigateTo('browse');
-  },
-
-  buildAssetCombinations() {
-    if (!this.selectedTemplate) return [{}];
-    const combos = [{}];
-    this.selectedTemplate.assetSlots.forEach(slot => {
-      if (this.selectedAssets[slot.id + '_all']) {
-        const matching = AppState.assets.filter(a => a.category === this.detectSlotCategory(slot.id));
-        if (matching.length > 0) {
-          const newCombos = [];
-          combos.forEach(combo => { matching.forEach(asset => { newCombos.push(Object.assign({}, combo, { [slot.id]: asset })); }); });
-          combos.length = 0; combos.push(...newCombos);
-        }
-      } else if (this.selectedAssets[slot.id]) {
-        combos.forEach(combo => { combo[slot.id] = this.selectedAssets[slot.id]; });
-      }
-    });
-    return combos;
   },
 
   // ============================================
