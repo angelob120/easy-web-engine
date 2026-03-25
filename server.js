@@ -96,9 +96,9 @@ function downloadFile(remoteUrl, filename, redirects) {
   return new Promise((resolve, reject) => {
     const filePath = path.join(MEMES_DIR, filename);
     if (fs.existsSync(filePath)) { resolve('/memes/' + filename); return; }
-    const proto = url => url.startsWith('https') ? https : http;
+    const proto = remoteUrl.startsWith('https') ? https : http;
     const file = fs.createWriteStream(filePath);
-    proto(remoteUrl).get(remoteUrl, { headers: { 'User-Agent': UA } }, (res) => {
+    proto.get(remoteUrl, { headers: { 'User-Agent': UA } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         file.close(); fs.unlink(filePath, () => {});
         return downloadFile(res.headers.location, filename, redirects + 1).then(resolve).catch(reject);
@@ -337,15 +337,19 @@ async function doImport(memes, templates, res) {
       continue;
     }
 
-    const rawUrl = String(meme.url || '');
+    const rawUrl = String(meme.url || '').trim();
     const extMatch = rawUrl.match(/\.(gif|jpg|jpeg|png|webp)$/i);
     const ext = extMatch ? '.' + extMatch[1].toLowerCase() : '.jpg';
     const isGif = ext === '.gif';
     const filename = 'imgflip-' + meme.id + ext;
 
     let localImagePath = null;
-    try { localImagePath = await downloadFile(rawUrl, filename); }
-    catch (e) { console.warn('Download failed:', meme.name, e.message); }
+    if (!rawUrl || !rawUrl.startsWith('http')) {
+      console.warn('Download skipped (no valid URL):', meme.name, '| url:', rawUrl || '(empty)');
+    } else {
+      try { localImagePath = await downloadFile(rawUrl, filename); }
+      catch (e) { console.warn('Download failed:', meme.name, e.message); }
+    }
 
     const boxCount = Math.max(1, parseInt(meme.box_count) || 2);
     const zoneLabels = ['Top text', 'Bottom text', 'Middle text', 'Text 4', 'Text 5', 'Text 6'];
