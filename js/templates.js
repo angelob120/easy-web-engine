@@ -1,65 +1,200 @@
 /**
- * EASY WEB STUDIOS - CONTENT ENGINE
- * Template Rendering Functions
+ * CONTENT FACTORY - Template Renderer
+ * Renders all format templates to canvas with motion effects
  */
 
 const TemplateRenderer = {
   canvas: null,
   ctx: null,
-  mockupImages: {}, // Store loaded mockup images
+  loadedAssets: {}, // Cache for loaded images/videos
 
-  /**
-   * Initialize the canvas
-   */
   init() {
     this.canvas = document.getElementById('render-canvas');
-    this.ctx = this.canvas.getContext('2d');
-    this.loadMockupImages();
+    if (this.canvas) {
+      this.ctx = this.canvas.getContext('2d');
+    }
   },
 
-  /**
-   * Load mockup images from storage
-   */
-  loadMockupImages() {
-    Object.keys(NICHE_MOCKUPS).forEach(niche => {
-      const dataUrl = NICHE_MOCKUPS[niche];
-      if (dataUrl) {
+  // Load an asset (image or video frame)
+  async loadAsset(asset) {
+    if (!asset || !asset.dataUrl) return null;
+    
+    if (this.loadedAssets[asset.id]) {
+      return this.loadedAssets[asset.id];
+    }
+
+    return new Promise((resolve) => {
+      if (asset.type === 'video') {
+        const video = document.createElement('video');
+        video.src = asset.dataUrl;
+        video.onloadeddata = () => {
+          this.loadedAssets[asset.id] = video;
+          resolve(video);
+        };
+        video.onerror = () => resolve(null);
+      } else {
         const img = new Image();
         img.onload = () => {
-          this.mockupImages[niche] = img;
+          this.loadedAssets[asset.id] = img;
+          resolve(img);
         };
-        img.src = dataUrl;
+        img.onerror = () => resolve(null);
+        img.src = asset.dataUrl;
       }
     });
   },
 
-  /**
-   * Add a mockup image for a niche
-   */
-  addMockupImage(niche, dataUrl) {
-    NICHE_MOCKUPS[niche] = dataUrl;
-    localStorage.setItem('niche_mockups', JSON.stringify(NICHE_MOCKUPS));
-    
-    const img = new Image();
-    img.onload = () => {
-      this.mockupImages[niche] = img;
-    };
-    img.src = dataUrl;
+  // Main render function
+  async renderToCanvas(template, content, assets) {
+    const w = CANVAS_WIDTH;
+    const h = CANVAS_HEIGHT;
+    this.canvas.width = w;
+    this.canvas.height = h;
+    this.ctx.clearRect(0, 0, w, h);
+
+    // Render based on template
+    switch (template.id) {
+      case 'drake':
+        await this.renderDrake(w, h, content, assets);
+        break;
+      case 'screenshot-caption':
+        await this.renderScreenshotCaption(w, h, content, assets);
+        break;
+      case 'breaking-news':
+        await this.renderBreakingNews(w, h, content, assets);
+        break;
+      case 'expanding-brain':
+        await this.renderExpandingBrain(w, h, content, assets);
+        break;
+      case 'this-vs-that':
+        await this.renderThisVsThat(w, h, content, assets);
+        break;
+      case 'reaction-text':
+        await this.renderReactionText(w, h, content, assets);
+        break;
+      case 'quote-card':
+        await this.renderQuoteCard(w, h, content, assets);
+        break;
+      case 'news-ticker':
+        await this.renderNewsTicker(w, h, content, assets);
+        break;
+      case 'pov-stopper':
+        await this.renderPovStopper(w, h, content, assets);
+        break;
+      case 'before-after':
+        await this.renderBeforeAfter(w, h, content, assets);
+        break;
+      case 'listicle':
+        await this.renderListicle(w, h, content, assets);
+        break;
+      case 'hot-take':
+        await this.renderHotTake(w, h, content, assets);
+        break;
+      default:
+        this.renderPlaceholder(w, h, template.name);
+    }
+
+    return this.canvas.toDataURL('image/png');
   },
 
-  /**
-   * Remove a mockup image for a niche
-   */
-  removeMockupImage(niche) {
-    delete NICHE_MOCKUPS[niche];
-    delete this.mockupImages[niche];
-    localStorage.setItem('niche_mockups', JSON.stringify(NICHE_MOCKUPS));
+  // ============================================
+  // HELPER FUNCTIONS
+  // ============================================
+
+  drawBackground(color = '#0a0a0f') {
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   },
 
-  /**
-   * Draw a rounded rectangle
-   */
-  roundRect(x, y, w, h, r) {
+  async drawAsset(asset, x, y, width, height, fit = 'cover') {
+    if (!asset) return;
+    const media = await this.loadAsset(asset);
+    if (!media) return;
+
+    const sourceW = media.videoWidth || media.width;
+    const sourceH = media.videoHeight || media.height;
+
+    if (fit === 'cover') {
+      const scale = Math.max(width / sourceW, height / sourceH);
+      const scaledW = sourceW * scale;
+      const scaledH = sourceH * scale;
+      const offsetX = (width - scaledW) / 2;
+      const offsetY = (height - scaledH) / 2;
+      
+      this.ctx.save();
+      this.ctx.beginPath();
+      this.ctx.rect(x, y, width, height);
+      this.ctx.clip();
+      this.ctx.drawImage(media, x + offsetX, y + offsetY, scaledW, scaledH);
+      this.ctx.restore();
+    } else {
+      const scale = Math.min(width / sourceW, height / sourceH);
+      const scaledW = sourceW * scale;
+      const scaledH = sourceH * scale;
+      const offsetX = (width - scaledW) / 2;
+      const offsetY = (height - scaledH) / 2;
+      this.ctx.drawImage(media, x + offsetX, y + offsetY, scaledW, scaledH);
+    }
+  },
+
+  drawText(text, x, y, maxWidth, style = {}) {
+    const {
+      fontSize = 64,
+      fontWeight = 'bold',
+      fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+      color = '#FFFFFF',
+      stroke = null,
+      strokeWidth = 0,
+      align = 'center',
+      lineHeight = 1.2,
+      maxLines = 5
+    } = style;
+
+    this.ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    this.ctx.textAlign = align;
+    this.ctx.textBaseline = 'top';
+
+    // Word wrap
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const metrics = this.ctx.measureText(testLine);
+      
+      if (metrics.width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+
+    // Limit lines
+    const displayLines = lines.slice(0, maxLines);
+    const actualLineHeight = fontSize * lineHeight;
+
+    // Draw each line
+    displayLines.forEach((line, i) => {
+      const lineY = y + (i * actualLineHeight);
+      
+      if (stroke && strokeWidth > 0) {
+        this.ctx.strokeStyle = stroke;
+        this.ctx.lineWidth = strokeWidth;
+        this.ctx.lineJoin = 'round';
+        this.ctx.strokeText(line, x, lineY);
+      }
+      
+      this.ctx.fillStyle = color;
+      this.ctx.fillText(line, x, lineY);
+    });
+
+    return displayLines.length * actualLineHeight;
+  },
+
+  drawRoundedRect(x, y, w, h, r) {
     this.ctx.beginPath();
     this.ctx.moveTo(x + r, y);
     this.ctx.lineTo(x + w - r, y);
@@ -73,735 +208,559 @@ const TemplateRenderer = {
     this.ctx.closePath();
   },
 
-  /**
-   * Wrap text to fit within maxWidth
-   */
-  wrapText(text, x, y, maxWidth, lineHeight) {
-    const words = text.split(' ');
-    let line = '';
-    let lines = [];
-
-    for (let n = 0; n < words.length; n++) {
-      const testLine = line + words[n] + ' ';
-      const metrics = this.ctx.measureText(testLine);
-      if (metrics.width > maxWidth && n > 0) {
-        lines.push(line);
-        line = words[n] + ' ';
-      } else {
-        line = testLine;
-      }
-    }
-    lines.push(line);
-
-    lines.forEach((l, i) => {
-      this.ctx.fillText(l.trim(), x, y + (i * lineHeight));
-    });
-
-    return lines.length;
+  renderPlaceholder(w, h, name) {
+    this.drawBackground('#1a1a2e');
+    this.ctx.fillStyle = '#333';
+    this.drawRoundedRect(w/2 - 200, h/2 - 100, 400, 200, 20);
+    this.ctx.fill();
+    this.drawText(name, w/2, h/2 - 20, w - 100, { fontSize: 36, color: '#888' });
+    this.drawText('Add assets to preview', w/2, h/2 + 30, w - 100, { fontSize: 24, color: '#555' });
   },
 
-  /**
-   * Render template to canvas and return data URL
-   */
-  renderToCanvas(template, vars) {
-    const niche = vars.NICHE || 'Roofer';
-    const city = vars.CITY || 'Detroit';
-    const hook = vars.HOOK || 'Your competitors are doing this';
-    const tagline = vars.TAGLINE || 'Just Pay Hosting';
-    const color = NICHE_COLORS[niche] || '#D4A03C';
-    const bgColor = NICHE_BG_COLORS ? (NICHE_BG_COLORS[niche] || '#1a1a2e') : '#1a1a2e';
-    const emoji = NICHE_EMOJIS[niche] || '🔥';
-    const displayName = NICHE_DISPLAY ? (NICHE_DISPLAY[niche] || niche.toUpperCase()) : niche.toUpperCase();
+  // ============================================
+  // TEMPLATE RENDERERS
+  // ============================================
 
-    const w = CANVAS_WIDTH;
-    const h = CANVAS_HEIGHT;
-    this.canvas.width = w;
-    this.canvas.height = h;
-
-    this.ctx.clearRect(0, 0, w, h);
-
-    // Render based on template layout
-    switch (template.layout) {
-      case 'mockup-showcase':
-        this.renderMockupShowcase(w, h, { niche, city, hook, tagline, color, bgColor, emoji, displayName });
-        break;
-      case 'simple-offer':
-        this.renderSimpleOffer(w, h, { niche, city, hook, tagline, color, bgColor, emoji });
-        break;
-      case 'hook-value':
-        this.renderHookValue(w, h, { niche, city, hook, tagline, color, emoji });
-        break;
-      case 'pov-scroll':
-        this.renderPovScroll(w, h, { niche, city, hook, tagline, color, emoji });
-        break;
-      case 'city-callout':
-        this.renderCityCallout(w, h, { niche, city, hook, tagline, color, emoji });
-        break;
-      case 'before-after':
-        this.renderBeforeAfter(w, h, { niche, city, hook, tagline, color, emoji });
-        break;
-    }
-
-    return this.canvas.toDataURL('image/png');
-  },
-
-  /**
-   * Device Mockup Showcase Template - EXACT MATCH to professional examples
-   */
-  renderMockupShowcase(w, h, vars) {
-    const { niche, color, bgColor, displayName } = vars;
+  async renderDrake(w, h, content, assets) {
+    this.drawBackground('#0a0a0f');
     
-    // === BACKGROUND ===
-    // Dark base
+    const panelHeight = h / 2;
+    const imageWidth = w * 0.4;
+    const textX = imageWidth + (w - imageWidth) / 2;
+    const textWidth = w - imageWidth - 80;
+
+    // Top panel (reject)
     this.ctx.fillStyle = '#1a1a1a';
-    this.ctx.fillRect(0, 0, w, h);
+    this.ctx.fillRect(0, 0, w, panelHeight);
     
-    // Radial gradient glow from center (slightly below center)
-    const glowCenterY = h * 0.52;
-    const glow = this.ctx.createRadialGradient(w/2, glowCenterY, 0, w/2, glowCenterY, w * 0.8);
-    glow.addColorStop(0, color + '50');  // Stronger color in center
-    glow.addColorStop(0.4, color + '25');
-    glow.addColorStop(0.7, color + '10');
-    glow.addColorStop(1, 'transparent');
-    this.ctx.fillStyle = glow;
-    this.ctx.fillRect(0, 0, w, h);
-
-    // === "100% FREE" HEADER ===
-    this.ctx.textAlign = 'center';
-    this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.font = 'bold 130px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
-    this.ctx.fillText('100% FREE', w/2, 320);
-    
-    // === NICHE SUBTITLE ===
-    this.ctx.fillStyle = color;
-    this.ctx.font = 'bold 58px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
-    this.ctx.fillText(`${displayName} WEBSITE DESIGN`, w/2, 420);
-
-    // === DEVICE MOCKUP IMAGE ===
-    const mockupCenterY = h * 0.52;
-    const mockupMaxWidth = w * 0.85;
-    const mockupMaxHeight = h * 0.38;
-    
-    if (NICHE_MOCKUPS[niche] && this.mockupImages && this.mockupImages[niche]) {
-      // Draw the uploaded mockup image
-      const img = this.mockupImages[niche];
-      const imgAspect = img.width / img.height;
-      
-      let drawW, drawH;
-      // Fit to max dimensions while preserving aspect ratio
-      if (imgAspect > mockupMaxWidth / mockupMaxHeight) {
-        drawW = mockupMaxWidth;
-        drawH = mockupMaxWidth / imgAspect;
-      } else {
-        drawH = mockupMaxHeight;
-        drawW = mockupMaxHeight * imgAspect;
-      }
-      
-      const drawX = (w - drawW) / 2;
-      const drawY = mockupCenterY - drawH / 2;
-      
-      this.ctx.drawImage(img, drawX, drawY, drawW, drawH);
+    if (assets['reaction-top']) {
+      await this.drawAsset(assets['reaction-top'], 0, 0, imageWidth, panelHeight);
     } else {
-      // No mockup uploaded - show placeholder
-      this.drawDevicePlaceholder(w, h, mockupCenterY, color, niche);
+      // Placeholder
+      this.ctx.fillStyle = '#2a2a2a';
+      this.ctx.fillRect(20, 20, imageWidth - 40, panelHeight - 40);
+      this.drawText('❌', imageWidth/2, panelHeight/2 - 40, imageWidth, { fontSize: 80 });
     }
 
-    // === FEATURE CALLOUTS WITH ARROWS ===
-    const calloutY_top = mockupCenterY - 200;
-    const calloutY_bottom = mockupCenterY + 230;
-    const calloutX_left = 130;
-    const calloutX_right = w - 130;
-    
-    // Top-left: "Tailored Design"
-    this.drawFeatureCallout(calloutX_left, calloutY_top, 'Tailored\nDesign', 'top-left');
-    
-    // Top-right: "Get Your Business Online"
-    this.drawFeatureCallout(calloutX_right, calloutY_top, 'Get Your\nBusiness\nOnline', 'top-right');
-    
-    // Bottom-left: "Built for Desktop, Tablet & Mobile"
-    this.drawFeatureCallout(calloutX_left, calloutY_bottom, 'Built for\nDesktop,\nTablet\n& Mobile', 'bottom-left');
-    
-    // Bottom-right: "Search Engine Optimized"
-    this.drawFeatureCallout(calloutX_right, calloutY_bottom, 'Search\nEngine\nOptimized', 'bottom-right');
-
-    // === TAGLINE ===
-    this.ctx.fillStyle = color;
-    this.ctx.font = 'italic bold 46px Georgia, "Times New Roman", serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('Just Pay For Hosting', w/2, h - 370);
-    this.ctx.fillText('& Your Domain', w/2, h - 310);
-
-    // === 5.0 STAR RATING BADGE ===
-    this.drawRatingBadge(w/2, h - 170);
-    
-    this.ctx.textAlign = 'left';
-  },
-
-  /**
-   * Draw device placeholder when no mockup is uploaded
-   */
-  drawDevicePlaceholder(w, h, centerY, color, niche) {
-    const displayName = NICHE_DISPLAY ? (NICHE_DISPLAY[niche] || niche) : niche;
-    
-    // Desktop monitor (center, largest)
-    const monitorW = 380;
-    const monitorH = 240;
-    this.ctx.fillStyle = '#2a2a2a';
-    this.roundRect(w/2 - monitorW/2, centerY - monitorH/2 - 20, monitorW, monitorH, 12);
-    this.ctx.fill();
-    this.ctx.strokeStyle = '#444';
-    this.ctx.lineWidth = 2;
-    this.ctx.stroke();
-    
-    // Screen area
-    this.ctx.fillStyle = color + '15';
-    this.roundRect(w/2 - monitorW/2 + 15, centerY - monitorH/2 - 5, monitorW - 30, monitorH - 40, 4);
-    this.ctx.fill();
-    
-    // Monitor stand
-    this.ctx.fillStyle = '#3a3a3a';
-    this.ctx.fillRect(w/2 - 50, centerY + monitorH/2 - 25, 100, 40);
-    this.ctx.fillRect(w/2 - 70, centerY + monitorH/2 + 10, 140, 15);
-    
-    // Phone (left of monitor)
-    const phoneW = 90;
-    const phoneH = 170;
-    const phoneX = w/2 - monitorW/2 - phoneW - 30;
-    const phoneY = centerY - phoneH/2 + 20;
-    this.ctx.fillStyle = '#2a2a2a';
-    this.roundRect(phoneX, phoneY, phoneW, phoneH, 12);
-    this.ctx.fill();
-    this.ctx.fillStyle = color + '20';
-    this.roundRect(phoneX + 6, phoneY + 15, phoneW - 12, phoneH - 30, 6);
-    this.ctx.fill();
-    
-    // Tablet (right, behind phone)
-    const tabletW = 130;
-    const tabletH = 180;
-    const tabletX = w/2 + monitorW/2 + 20;
-    const tabletY = centerY - tabletH/2;
-    this.ctx.fillStyle = '#2a2a2a';
-    this.roundRect(tabletX, tabletY, tabletW, tabletH, 12);
-    this.ctx.fill();
-    this.ctx.fillStyle = color + '20';
-    this.roundRect(tabletX + 8, tabletY + 12, tabletW - 16, tabletH - 24, 6);
-    this.ctx.fill();
-    
-    // Placeholder text
-    this.ctx.fillStyle = '#666';
-    this.ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('Upload mockup image', w/2, centerY + 10);
-    this.ctx.font = '18px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('in Settings →', w/2, centerY + 40);
-  },
-
-  /**
-   * Draw feature callout with curved arrow
-   */
-  drawFeatureCallout(x, y, text, position) {
-    const lines = text.split('\n');
-    const lineHeight = 38;
-    const isLeft = position.includes('left');
-    const isTop = position.includes('top');
-    
-    // Text
-    this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.font = 'bold 32px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.textAlign = isLeft ? 'left' : 'right';
-    
-    lines.forEach((line, i) => {
-      this.ctx.fillText(line, x, y + (i * lineHeight));
+    // Top text
+    const rejectText = content.reject || 'Bad option here...';
+    this.drawText(rejectText, textX, panelHeight/2 - 60, textWidth, {
+      fontSize: 52,
+      stroke: '#000',
+      strokeWidth: 4
     });
+
+    // Bottom panel (approve)
+    this.ctx.fillStyle = '#111111';
+    this.ctx.fillRect(0, panelHeight, w, panelHeight);
     
-    // Curved arrow
-    this.ctx.strokeStyle = '#FFFFFF';
-    this.ctx.lineWidth = 3;
-    this.ctx.lineCap = 'round';
-    
-    const textWidth = Math.max(...lines.map(l => this.ctx.measureText(l).width));
-    const textHeight = lines.length * lineHeight;
-    
-    // Arrow start point (from text)
-    let startX, startY, endX, endY, controlX, controlY;
-    
-    if (isLeft && isTop) {
-      // Top-left: arrow curves down-right
-      startX = x + textWidth + 15;
-      startY = y + textHeight/2 - 10;
-      endX = startX + 70;
-      endY = startY + 60;
-      controlX = startX + 60;
-      controlY = startY;
-    } else if (!isLeft && isTop) {
-      // Top-right: arrow curves down-left
-      startX = x - textWidth - 15;
-      startY = y + textHeight/2 - 10;
-      endX = startX - 70;
-      endY = startY + 60;
-      controlX = startX - 60;
-      controlY = startY;
-    } else if (isLeft && !isTop) {
-      // Bottom-left: arrow curves up-right
-      startX = x + textWidth + 15;
-      startY = y - 20;
-      endX = startX + 70;
-      endY = startY - 50;
-      controlX = startX + 60;
-      controlY = startY;
+    if (assets['reaction-bottom']) {
+      await this.drawAsset(assets['reaction-bottom'], 0, panelHeight, imageWidth, panelHeight);
     } else {
-      // Bottom-right: arrow curves up-left
-      startX = x - textWidth - 15;
-      startY = y - 20;
-      endX = startX - 70;
-      endY = startY - 50;
-      controlX = startX - 60;
-      controlY = startY;
-    }
-    
-    // Draw curved line
-    this.ctx.beginPath();
-    this.ctx.moveTo(startX, startY);
-    this.ctx.quadraticCurveTo(controlX, controlY, endX, endY);
-    this.ctx.stroke();
-    
-    // Arrow head
-    const headLen = 12;
-    const dx = endX - controlX;
-    const dy = endY - controlY;
-    const angle = Math.atan2(dy, dx);
-    
-    this.ctx.beginPath();
-    this.ctx.moveTo(endX, endY);
-    this.ctx.lineTo(endX - headLen * Math.cos(angle - Math.PI/6), endY - headLen * Math.sin(angle - Math.PI/6));
-    this.ctx.moveTo(endX, endY);
-    this.ctx.lineTo(endX - headLen * Math.cos(angle + Math.PI/6), endY - headLen * Math.sin(angle + Math.PI/6));
-    this.ctx.stroke();
-    
-    this.ctx.textAlign = 'left';
-  },
-
-  /**
-   * Draw 5.0 star rating badge (golden/yellow style)
-   */
-  drawRatingBadge(x, y) {
-    const badgeW = 280;
-    const badgeH = 65;
-    
-    // Golden pill background
-    const gradient = this.ctx.createLinearGradient(x - badgeW/2, y, x + badgeW/2, y);
-    gradient.addColorStop(0, '#D4A03C');
-    gradient.addColorStop(0.5, '#F4C55C');
-    gradient.addColorStop(1, '#D4A03C');
-    
-    this.ctx.fillStyle = gradient;
-    this.roundRect(x - badgeW/2, y - badgeH/2, badgeW, badgeH, badgeH/2);
-    this.ctx.fill();
-    
-    // Border
-    this.ctx.strokeStyle = '#B8860B';
-    this.ctx.lineWidth = 2;
-    this.roundRect(x - badgeW/2 + 3, y - badgeH/2 + 3, badgeW - 6, badgeH - 6, (badgeH - 6)/2);
-    this.ctx.stroke();
-    
-    // "5.0" text
-    this.ctx.fillStyle = '#1a1a1a';
-    this.ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('5.0', x - 70, y + 10);
-    
-    // Stars
-    this.ctx.font = '26px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('★★★★★', x + 40, y + 10);
-  },
-
-  /**
-   * Simple Offer Template (no mockup required)
-   */
-  renderSimpleOffer(w, h, vars) {
-    const { niche, city, color, bgColor, emoji } = vars;
-    
-    // Dark gradient background
-    const gradient = this.ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, '#111111');
-    gradient.addColorStop(0.5, bgColor);
-    gradient.addColorStop(1, '#111111');
-    this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, w, h);
-    
-    // Center glow
-    const glow = this.ctx.createRadialGradient(w/2, h * 0.45, 0, w/2, h * 0.45, 400);
-    glow.addColorStop(0, color + '40');
-    glow.addColorStop(1, 'transparent');
-    this.ctx.fillStyle = glow;
-    this.ctx.fillRect(0, 0, w, h);
-
-    // "100% FREE" Header
-    this.ctx.textAlign = 'center';
-    this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.font = 'bold 130px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('100% FREE', w/2, 350);
-    
-    // Niche + Website Design
-    this.ctx.fillStyle = color;
-    this.ctx.font = 'bold 72px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText(`${niche.toUpperCase()}`, w/2, 480);
-    this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.font = 'bold 60px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('WEBSITE DESIGN', w/2, 560);
-
-    // Large emoji
-    this.ctx.font = '200px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText(emoji, w/2, h * 0.52);
-
-    // City badge
-    if (city) {
-      this.ctx.fillStyle = color;
-      const cityText = `📍 ${city}`;
-      this.ctx.font = 'bold 48px -apple-system, BlinkMacSystemFont, sans-serif';
-      const cityWidth = this.ctx.measureText(cityText).width + 60;
-      this.roundRect(w/2 - cityWidth/2, h * 0.62, cityWidth, 80, 40);
-      this.ctx.fill();
-      this.ctx.fillStyle = '#FFFFFF';
-      this.ctx.fillText(cityText, w/2, h * 0.62 + 55);
+      this.ctx.fillStyle = '#1f2f1f';
+      this.ctx.fillRect(20, panelHeight + 20, imageWidth - 40, panelHeight - 40);
+      this.drawText('✅', imageWidth/2, panelHeight + panelHeight/2 - 40, imageWidth, { fontSize: 80 });
     }
 
-    // Features list
-    const features = ['✓ Tailored Design', '✓ Mobile Ready', '✓ SEO Optimized'];
-    this.ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    this.ctx.font = '36px -apple-system, BlinkMacSystemFont, sans-serif';
-    features.forEach((f, i) => {
-      this.ctx.fillText(f, w/2, h * 0.75 + (i * 50));
+    // Bottom text
+    const approveText = content.approve || 'Good option here...';
+    this.drawText(approveText, textX, panelHeight + panelHeight/2 - 60, textWidth, {
+      fontSize: 52,
+      stroke: '#000',
+      strokeWidth: 4
     });
 
-    // Tagline
-    this.ctx.fillStyle = color;
-    this.ctx.font = 'bold 44px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('Just Pay For Hosting & Your Domain', w/2, h - 320);
-
-    // Rating badge
-    this.drawRatingBadge(w/2, h - 180, color);
-    
-    this.ctx.textAlign = 'left';
-  },
-
-  /**
-   * Hook + Value Bomb Template
-   */
-  renderHookValue(w, h, vars) {
-    const { niche, city, hook, color } = vars;
-
-    // Gradient background
-    const gradient = this.ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, '#000');
-    gradient.addColorStop(0.5, color + '44');
-    gradient.addColorStop(1, '#000');
-    this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, w, h);
-
-    // Top hook text (in safe zone)
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 72px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.textAlign = 'center';
-    const hookLines = this.wrapText(hook.toUpperCase(), w / 2, SAFE_TOP + 100, w - 120, 85);
-
-    // Attention grabber
-    this.ctx.font = '120px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('👇', w / 2, SAFE_TOP + 100 + (hookLines * 85) + 100);
-
-    // Main value prop (center)
-    const centerY = h / 2 + 50;
-    this.ctx.font = 'bold 64px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillStyle = color;
-    this.ctx.fillText('FREE', w / 2, centerY - 80);
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 80px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText(`${niche} Website`, w / 2, centerY + 20);
-
-    // City badge
-    this.ctx.fillStyle = color;
-    const cityText = `📍 ${city}`;
-    this.ctx.font = 'bold 48px -apple-system, BlinkMacSystemFont, sans-serif';
-    const cityWidth = this.ctx.measureText(cityText).width + 60;
-    this.roundRect(w / 2 - cityWidth / 2, centerY + 80, cityWidth, 80, 40);
-    this.ctx.fill();
-    this.ctx.fillStyle = '#fff';
-    this.ctx.fillText(cityText, w / 2, centerY + 135);
-
-    // Bottom CTA (above safe zone)
-    const bottomY = h - SAFE_BOTTOM - 50;
-    this.ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    this.ctx.font = 'bold 52px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('Link in bio 🔗', w / 2, bottomY);
-
-    this.ctx.textAlign = 'left';
-  },
-
-  /**
-   * POV Scroll Stopper Template
-   */
-  renderPovScroll(w, h, vars) {
-    const { niche, hook, color, emoji } = vars;
-
-    // Black background with accent
-    this.ctx.fillStyle = '#000';
-    this.ctx.fillRect(0, 0, w, h);
-
-    // POV text at top (safe zone)
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 56px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('POV:', w / 2, SAFE_TOP + 80);
-
-    this.ctx.font = 'bold 64px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.wrapText(hook, w / 2, SAFE_TOP + 180, w - 100, 80);
-
-    // Center content area
-    const centerY = h / 2;
-    this.ctx.fillStyle = color + '33';
-    this.roundRect(60, centerY - 250, w - 120, 500, 30);
-    this.ctx.fill();
-
-    // Emoji and content
-    this.ctx.font = '180px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText(emoji, w / 2, centerY + 20);
-
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 56px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText(`${niche} Website`, w / 2, centerY + 150);
-    this.ctx.font = '40px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    this.ctx.fillText('Built in 60 seconds', w / 2, centerY + 210);
-
-    // Bottom branding
-    const bottomY = h - SAFE_BOTTOM - 30;
-    this.ctx.fillStyle = color;
-    this.roundRect(w / 2 - 200, bottomY - 60, 400, 80, 40);
-    this.ctx.fill();
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('Easy Web Studios', w / 2, bottomY);
-
-    this.ctx.textAlign = 'left';
-  },
-
-  /**
-   * City Call-Out Template
-   */
-  renderCityCallout(w, h, vars) {
-    const { niche, city, tagline, color } = vars;
-
-    // Vibrant gradient
-    const gradient = this.ctx.createLinearGradient(0, 0, w, h);
-    gradient.addColorStop(0, color);
-    gradient.addColorStop(1, color + 'aa');
-    this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, w, h);
-
-    // Decorative elements
-    this.ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    this.ctx.beginPath();
-    this.ctx.arc(w - 100, 300, 400, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.beginPath();
-    this.ctx.arc(100, h - 400, 300, 0, Math.PI * 2);
-    this.ctx.fill();
-
-    // Top attention (safe zone)
-    this.ctx.textAlign = 'center';
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 48px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('🚨 ATTENTION 🚨', w / 2, SAFE_TOP + 80);
-
-    // City call-out
-    const centerY = h / 2 - 100;
-    this.ctx.font = 'bold 140px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText(city.toUpperCase(), w / 2, centerY);
-
-    this.ctx.font = 'bold 72px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText(`${niche}s!`, w / 2, centerY + 100);
-
-    // Value prop box
-    this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    this.roundRect(60, centerY + 160, w - 120, 200, 24);
-    this.ctx.fill();
-
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 52px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('FREE Website Design', w / 2, centerY + 250);
-    this.ctx.font = '40px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText(tagline, w / 2, centerY + 320);
-
-    // Bottom CTA
-    const bottomY = h - SAFE_BOTTOM - 30;
-    this.ctx.fillStyle = '#000';
-    this.roundRect(w / 2 - 180, bottomY - 70, 360, 90, 45);
-    this.ctx.fill();
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 40px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('DM "FREE" 💬', w / 2, bottomY);
-
-    this.ctx.textAlign = 'left';
-  },
-
-  /**
-   * Before/After Tease Template
-   */
-  renderBeforeAfter(w, h, vars) {
-    const { niche, city, color } = vars;
-
-    // Split design
-    this.ctx.fillStyle = '#1a1a1a';
-    this.ctx.fillRect(0, 0, w, h);
-
-    // Top label (safe zone)
-    this.ctx.textAlign = 'center';
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 48px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText(`${city} ${niche}`, w / 2, SAFE_TOP + 60);
-
-    // Before section
-    const boxTop = SAFE_TOP + 120;
-    const boxHeight = (h - SAFE_TOP - SAFE_BOTTOM - 200) / 2;
-
-    this.ctx.fillStyle = '#2a2a2a';
-    this.roundRect(60, boxTop, w - 120, boxHeight, 24);
-    this.ctx.fill();
-
-    this.ctx.fillStyle = '#ef4444';
-    this.ctx.font = 'bold 56px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('❌ BEFORE', w / 2, boxTop + 80);
-    this.ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    this.ctx.font = '36px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('Outdated website', w / 2, boxTop + 150);
-    this.ctx.fillText('Losing customers daily', w / 2, boxTop + 200);
-    this.ctx.fillText('No mobile support', w / 2, boxTop + 250);
-
-    // After section
-    const afterTop = boxTop + boxHeight + 40;
-    this.ctx.fillStyle = color + '44';
-    this.roundRect(60, afterTop, w - 120, boxHeight, 24);
-    this.ctx.fill();
-    this.ctx.strokeStyle = color;
+    // Divider line
+    this.ctx.strokeStyle = '#333';
     this.ctx.lineWidth = 4;
-    this.roundRect(60, afterTop, w - 120, boxHeight, 24);
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, panelHeight);
+    this.ctx.lineTo(w, panelHeight);
     this.ctx.stroke();
-
-    this.ctx.fillStyle = '#22c55e';
-    this.ctx.font = 'bold 56px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('✅ AFTER', w / 2, afterTop + 80);
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '36px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('Modern, fast website', w / 2, afterTop + 150);
-    this.ctx.fillText('Converting visitors', w / 2, afterTop + 200);
-    this.ctx.fillText('100% mobile ready', w / 2, afterTop + 250);
-
-    // Bottom CTA
-    const bottomY = h - SAFE_BOTTOM - 30;
-    this.ctx.fillStyle = color;
-    this.roundRect(w / 2 - 220, bottomY - 70, 440, 90, 45);
-    this.ctx.fill();
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 40px -apple-system, BlinkMacSystemFont, sans-serif';
-    this.ctx.fillText('Get yours FREE 🔥', w / 2, bottomY);
-
-    this.ctx.textAlign = 'left';
   },
 
-  /**
-   * Render mini preview for UI display
-   */
-  renderMiniPreview(template, vars, container) {
-    const niche = vars.NICHE || 'Roofer';
-    const city = vars.CITY || 'Detroit';
-    const hook = vars.HOOK || 'Your competitors...';
-    const color = NICHE_COLORS[niche] || '#3B82F6';
-    const bgColor = NICHE_BG_COLORS ? (NICHE_BG_COLORS[niche] || '#1a1a2e') : '#1a1a2e';
-    const emoji = NICHE_EMOJIS[niche] || '🔥';
-    const hasMockup = NICHE_MOCKUPS && NICHE_MOCKUPS[niche];
+  async renderScreenshotCaption(w, h, content, assets) {
+    this.drawBackground('#0a0a0f');
 
-    let html = '';
-
-    switch (template.layout) {
-      case 'mockup-showcase':
-        html = `<div style="height:100%;background:radial-gradient(circle at center, ${color}40, ${bgColor}, #111);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;">
-          <div style="font-size:9px;font-weight:700;color:#fff;">100% FREE</div>
-          <div style="font-size:7px;font-weight:700;color:${color};margin:2px 0;">${niche.toUpperCase()}</div>
-          <div style="font-size:18px;margin:4px 0;">${hasMockup ? '🖥️📱' : '📱'}</div>
-          <div style="font-size:6px;color:${color};">★★★★★</div>
-        </div>`;
-        break;
-      case 'simple-offer':
-        html = `<div style="height:100%;background:linear-gradient(${bgColor}, #111);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;">
-          <div style="font-size:9px;font-weight:700;color:#fff;">100% FREE</div>
-          <div style="font-size:7px;font-weight:700;color:${color};">${niche.toUpperCase()}</div>
-          <div style="font-size:18px;margin:4px 0;">${emoji}</div>
-          <div style="font-size:6px;color:#888;">📍 ${city}</div>
-        </div>`;
-        break;
-      case 'hook-value':
-        html = `<div style="height:100%;background:linear-gradient(#000,${color}44,#000);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;">
-          <div style="font-size:8px;font-weight:700;color:#fff;margin-bottom:4px;">FREE</div>
-          <div style="font-size:10px;font-weight:700;color:#fff;">${niche}</div>
-          <div style="font-size:7px;color:${color};margin-top:4px;">📍 ${city}</div>
-        </div>`;
-        break;
-      case 'pov-scroll':
-        html = `<div style="height:100%;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;">
-          <div style="font-size:7px;color:#fff;margin-bottom:4px;">POV:</div>
-          <div style="font-size:20px;">${emoji}</div>
-          <div style="font-size:8px;color:#fff;margin-top:4px;">${niche}</div>
-        </div>`;
-        break;
-      case 'city-callout':
-        html = `<div style="height:100%;background:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;">
-          <div style="font-size:7px;color:#fff;">🚨</div>
-          <div style="font-size:12px;font-weight:700;color:#fff;">${city}</div>
-          <div style="font-size:8px;color:#fff;">${niche}s</div>
-        </div>`;
-        break;
-      case 'before-after':
-        html = `<div style="height:100%;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;">
-          <div style="font-size:7px;color:#ef4444;">❌ Before</div>
-          <div style="width:80%;height:1px;background:#333;margin:4px 0;"></div>
-          <div style="font-size:7px;color:#22c55e;">✅ After</div>
-        </div>`;
-        break;
+    // Draw screenshot
+    if (assets['screenshot']) {
+      await this.drawAsset(assets['screenshot'], 0, 0, w, h);
+      
+      // Darken top for caption
+      const gradient = this.ctx.createLinearGradient(0, 0, 0, h * 0.4);
+      gradient.addColorStop(0, 'rgba(0,0,0,0.8)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(0, 0, w, h * 0.4);
     }
 
-    container.innerHTML = html;
-  }
-};
-
-/**
- * Caption Generator
- */
-const CaptionGenerator = {
-  /**
-   * Generate a caption for the given variables
-   */
-  generate(vars) {
-    const niche = vars.NICHE || 'business';
-    const city = vars.CITY || '';
-    const emoji = NICHE_EMOJIS[niche] || '🔥';
-
-    const captions = [
-      `We just built a FREE website for ${city} ${niche}s ${emoji}\n\nNo design fees. No contracts. Just pay hosting.\n\nDM "FREE" to get started 💬`,
-      `${city} ${niche}s - your competitors are upgrading their websites ${emoji}\n\nWe build yours FREE. Seriously.\n\nLink in bio 🔗`,
-      `POV: You finally got a professional website for your ${niche.toLowerCase()} business ${emoji}\n\n100% free design. ${city} locals only.\n\nComment "INFO" 👇`,
-      `Attention ${city} ${niche}s! 🚨\n\nWe're giving away FREE website designs this month.\n\nNo catch. Just pay hosting.\n\nDM to claim yours ${emoji}`
-    ];
-
-    return captions[Math.floor(Math.random() * captions.length)];
+    // Caption
+    const caption = content.caption || 'Your caption here...';
+    this.drawText(caption, w/2, SAFE_TOP + 40, w - 100, {
+      fontSize: 64,
+      fontWeight: 'bold',
+      stroke: '#000',
+      strokeWidth: 5
+    });
   },
 
-  /**
-   * Generate hashtags for the given variables
-   */
-  generateHashtags(vars) {
-    const niche = (vars.NICHE || 'business').toLowerCase().replace(' ', '');
-    const city = (vars.CITY || 'local').toLowerCase().replace(' ', '');
+  async renderBreakingNews(w, h, content, assets) {
+    // Background
+    if (assets['background']) {
+      await this.drawAsset(assets['background'], 0, 0, w, h);
+      // Dark overlay
+      this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      this.ctx.fillRect(0, 0, w, h);
+    } else {
+      this.drawBackground('#0f1628');
+    }
 
-    return `#${niche} #${city}business #freewebsite #smallbusiness #entrepreneur #${city} #webdesign #localbusiness #businessowner #marketing`;
+    // Breaking news banner at top
+    this.ctx.fillStyle = '#CC0000';
+    this.ctx.fillRect(0, SAFE_TOP, w, 80);
+    this.drawText('🚨 BREAKING NEWS 🚨', w/2, SAFE_TOP + 20, w, {
+      fontSize: 42,
+      color: '#FFFFFF'
+    });
+
+    // Main headline
+    const headline = content.headline || 'Your headline here...';
+    const centerY = h / 2 - 100;
+    
+    // Headline background box
+    this.ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    this.drawRoundedRect(40, centerY - 20, w - 80, 280, 16);
+    this.ctx.fill();
+    
+    this.drawText(headline, w/2, centerY, w - 120, {
+      fontSize: 58,
+      fontWeight: 'bold',
+      lineHeight: 1.3
+    });
+
+    // Subtext
+    if (content.subtext) {
+      this.drawText(content.subtext, w/2, h - SAFE_BOTTOM - 100, w - 80, {
+        fontSize: 36,
+        color: '#cccccc'
+      });
+    }
+  },
+
+  async renderExpandingBrain(w, h, content, assets) {
+    this.drawBackground('#0a0a0f');
+    
+    const levels = 4;
+    const levelHeight = (h - SAFE_TOP - SAFE_BOTTOM) / levels;
+    const textWidth = w * 0.55;
+    const imageWidth = w * 0.4;
+
+    for (let i = 0; i < levels; i++) {
+      const y = SAFE_TOP + (i * levelHeight);
+      const levelNum = i + 1;
+      
+      // Alternating background
+      this.ctx.fillStyle = i % 2 === 0 ? '#111118' : '#0a0a0f';
+      this.ctx.fillRect(0, y, w, levelHeight);
+      
+      // Brain image on right
+      const brainAsset = assets[`brain${levelNum}`];
+      if (brainAsset) {
+        await this.drawAsset(brainAsset, textWidth + 20, y + 10, imageWidth - 40, levelHeight - 20, 'contain');
+      } else {
+        // Placeholder brain emojis
+        const brains = ['🧠', '🧠✨', '🧠💫', '🧠🌌'];
+        this.drawText(brains[i], textWidth + imageWidth/2, y + levelHeight/2 - 30, imageWidth, { fontSize: 64 });
+      }
+
+      // Text on left
+      const text = content[`level${levelNum}`] || `Level ${levelNum} text...`;
+      this.drawText(text, 50, y + levelHeight/2 - 40, textWidth - 80, {
+        fontSize: 42,
+        align: 'left',
+        stroke: '#000',
+        strokeWidth: 2
+      });
+
+      // Divider
+      if (i < levels - 1) {
+        this.ctx.strokeStyle = '#333';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(20, y + levelHeight);
+        this.ctx.lineTo(w - 20, y + levelHeight);
+        this.ctx.stroke();
+      }
+    }
+  },
+
+  async renderThisVsThat(w, h, content, assets) {
+    this.drawBackground('#0a0a0f');
+    
+    const halfWidth = w / 2;
+
+    // Left side
+    if (assets['left-image']) {
+      await this.drawAsset(assets['left-image'], 0, 0, halfWidth, h);
+    } else {
+      this.ctx.fillStyle = '#1a1a2e';
+      this.ctx.fillRect(0, 0, halfWidth, h);
+    }
+
+    // Right side
+    if (assets['right-image']) {
+      await this.drawAsset(assets['right-image'], halfWidth, 0, halfWidth, h);
+    } else {
+      this.ctx.fillStyle = '#2e1a1a';
+      this.ctx.fillRect(halfWidth, 0, halfWidth, h);
+    }
+
+    // Center divider
+    this.ctx.fillStyle = '#FFFFFF';
+    this.ctx.fillRect(halfWidth - 3, 0, 6, h);
+
+    // VS badge
+    this.ctx.fillStyle = '#ec4899';
+    this.ctx.beginPath();
+    this.ctx.arc(halfWidth, h/2, 60, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.drawText('VS', halfWidth, h/2 - 25, 100, { fontSize: 42, color: '#FFFFFF' });
+
+    // Labels with background
+    const leftLabel = content['left-label'] || 'This';
+    const rightLabel = content['right-label'] || 'That';
+
+    // Left label
+    this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    this.drawRoundedRect(20, h - SAFE_BOTTOM - 100, halfWidth - 60, 80, 12);
+    this.ctx.fill();
+    this.drawText(leftLabel, halfWidth/2, h - SAFE_BOTTOM - 85, halfWidth - 80, {
+      fontSize: 42,
+      stroke: '#000',
+      strokeWidth: 3
+    });
+
+    // Right label
+    this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    this.drawRoundedRect(halfWidth + 20, h - SAFE_BOTTOM - 100, halfWidth - 60, 80, 12);
+    this.ctx.fill();
+    this.drawText(rightLabel, halfWidth + halfWidth/2, h - SAFE_BOTTOM - 85, halfWidth - 80, {
+      fontSize: 42,
+      stroke: '#000',
+      strokeWidth: 3
+    });
+  },
+
+  async renderReactionText(w, h, content, assets) {
+    this.drawBackground('#0a0a0f');
+
+    // Main text at top
+    const mainText = content['main-text'] || 'Your text here...';
+    
+    // Text background
+    this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    this.ctx.fillRect(0, SAFE_TOP, w, 350);
+    
+    this.drawText(mainText, w/2, SAFE_TOP + 50, w - 80, {
+      fontSize: 64,
+      fontWeight: 'bold',
+      stroke: '#000',
+      strokeWidth: 4,
+      lineHeight: 1.3
+    });
+
+    // Reaction image
+    if (assets['reaction']) {
+      await this.drawAsset(assets['reaction'], 0, h * 0.35, w, h * 0.55);
+    } else {
+      this.drawText('😂', w/2, h/2 + 100, w, { fontSize: 200 });
+    }
+  },
+
+  async renderQuoteCard(w, h, content, assets) {
+    // Background
+    if (assets['background']) {
+      await this.drawAsset(assets['background'], 0, 0, w, h);
+      this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      this.ctx.fillRect(0, 0, w, h);
+    } else {
+      // Elegant gradient
+      const gradient = this.ctx.createLinearGradient(0, 0, w, h);
+      gradient.addColorStop(0, '#1a1a2e');
+      gradient.addColorStop(1, '#0f0f1e');
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(0, 0, w, h);
+    }
+
+    // Quote marks
+    this.ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    this.ctx.font = 'bold 300px Georgia, serif';
+    this.ctx.fillText('"', 60, 400);
+    this.ctx.fillText('"', w - 200, h - 200);
+
+    // Quote text
+    const quote = content.quote || 'Your quote here...';
+    this.drawText(quote, w/2, h/2 - 150, w - 160, {
+      fontSize: 52,
+      fontWeight: 'normal',
+      fontFamily: 'Georgia, serif',
+      lineHeight: 1.5
+    });
+
+    // Attribution
+    if (content.attribution) {
+      this.drawText(`— ${content.attribution}`, w/2, h - SAFE_BOTTOM - 80, w - 100, {
+        fontSize: 32,
+        color: '#888888'
+      });
+    }
+  },
+
+  async renderNewsTicker(w, h, content, assets) {
+    // Background
+    if (assets['background']) {
+      await this.drawAsset(assets['background'], 0, 0, w, h);
+    } else {
+      this.drawBackground('#0f1628');
+    }
+
+    // Red ticker bar
+    const tickerY = h / 2 - 60;
+    this.ctx.fillStyle = '#CC0000';
+    this.ctx.fillRect(0, tickerY, w, 120);
+
+    // Ticker text
+    const tickerText = content['ticker-text'] || 'BREAKING: Your headline here...';
+    this.drawText(tickerText, w/2, tickerY + 25, w - 60, {
+      fontSize: 44,
+      fontWeight: 'bold',
+      color: '#FFFFFF'
+    });
+
+    // "LIVE" badge
+    this.ctx.fillStyle = '#FFFFFF';
+    this.drawRoundedRect(40, SAFE_TOP + 20, 120, 50, 8);
+    this.ctx.fill();
+    this.ctx.fillStyle = '#CC0000';
+    this.ctx.beginPath();
+    this.ctx.arc(75, SAFE_TOP + 45, 10, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.drawText('LIVE', 110, SAFE_TOP + 25, 80, { fontSize: 28, color: '#000', align: 'left' });
+  },
+
+  async renderPovStopper(w, h, content, assets) {
+    // Main visual
+    if (assets['main-visual']) {
+      await this.drawAsset(assets['main-visual'], 0, 0, w, h);
+    } else {
+      this.drawBackground('#0a0a0f');
+    }
+
+    // Dark overlay at top
+    const gradient = this.ctx.createLinearGradient(0, 0, 0, h * 0.5);
+    gradient.addColorStop(0, 'rgba(0,0,0,0.9)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, w, h * 0.5);
+
+    // POV text
+    const povText = content['pov-text'] || 'POV: Something happens...';
+    this.drawText(povText, w/2, SAFE_TOP + 60, w - 80, {
+      fontSize: 58,
+      fontWeight: 'bold',
+      stroke: '#000',
+      strokeWidth: 5,
+      lineHeight: 1.3
+    });
+
+    // Context at bottom
+    if (content.context) {
+      const bottomGradient = this.ctx.createLinearGradient(0, h * 0.7, 0, h);
+      bottomGradient.addColorStop(0, 'rgba(0,0,0,0)');
+      bottomGradient.addColorStop(1, 'rgba(0,0,0,0.9)');
+      this.ctx.fillStyle = bottomGradient;
+      this.ctx.fillRect(0, h * 0.7, w, h * 0.3);
+
+      this.drawText(content.context, w/2, h - SAFE_BOTTOM - 60, w - 80, {
+        fontSize: 36,
+        color: '#cccccc'
+      });
+    }
+  },
+
+  async renderBeforeAfter(w, h, content, assets) {
+    this.drawBackground('#0a0a0f');
+    
+    const halfHeight = h / 2;
+
+    // Before (top)
+    if (assets['before-image']) {
+      await this.drawAsset(assets['before-image'], 0, 0, w, halfHeight);
+    } else {
+      this.ctx.fillStyle = '#2a1a1a';
+      this.ctx.fillRect(0, 0, w, halfHeight);
+    }
+
+    // Before label
+    this.ctx.fillStyle = '#ef4444';
+    this.drawRoundedRect(40, SAFE_TOP + 20, 200, 60, 8);
+    this.ctx.fill();
+    this.drawText('BEFORE', 140, SAFE_TOP + 32, 180, { fontSize: 32 });
+
+    const beforeLabel = content['before-label'] || '';
+    if (beforeLabel) {
+      this.drawText(beforeLabel, w/2, halfHeight - 100, w - 80, {
+        fontSize: 42,
+        stroke: '#000',
+        strokeWidth: 3
+      });
+    }
+
+    // After (bottom)
+    if (assets['after-image']) {
+      await this.drawAsset(assets['after-image'], 0, halfHeight, w, halfHeight);
+    } else {
+      this.ctx.fillStyle = '#1a2a1a';
+      this.ctx.fillRect(0, halfHeight, w, halfHeight);
+    }
+
+    // After label
+    this.ctx.fillStyle = '#22c55e';
+    this.drawRoundedRect(40, halfHeight + 20, 200, 60, 8);
+    this.ctx.fill();
+    this.drawText('AFTER', 140, halfHeight + 32, 180, { fontSize: 32 });
+
+    const afterLabel = content['after-label'] || '';
+    if (afterLabel) {
+      this.drawText(afterLabel, w/2, h - SAFE_BOTTOM - 60, w - 80, {
+        fontSize: 42,
+        stroke: '#000',
+        strokeWidth: 3
+      });
+    }
+
+    // Divider
+    this.ctx.strokeStyle = '#FFFFFF';
+    this.ctx.lineWidth = 4;
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, halfHeight);
+    this.ctx.lineTo(w, halfHeight);
+    this.ctx.stroke();
+  },
+
+  async renderListicle(w, h, content, assets) {
+    // Background
+    if (assets['background']) {
+      await this.drawAsset(assets['background'], 0, 0, w, h);
+      this.ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      this.ctx.fillRect(0, 0, w, h);
+    } else {
+      const gradient = this.ctx.createLinearGradient(0, 0, 0, h);
+      gradient.addColorStop(0, '#1a1a2e');
+      gradient.addColorStop(1, '#0a0a0f');
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(0, 0, w, h);
+    }
+
+    // Title
+    const title = content.title || '3 Things You Need to Know';
+    this.drawText(title, w/2, SAFE_TOP + 40, w - 80, {
+      fontSize: 56,
+      fontWeight: 'bold',
+      stroke: '#000',
+      strokeWidth: 4
+    });
+
+    // Items
+    const items = [content.item1, content.item2, content.item3].filter(Boolean);
+    const itemStartY = SAFE_TOP + 280;
+    const itemSpacing = 300;
+
+    items.forEach((item, i) => {
+      const y = itemStartY + (i * itemSpacing);
+      
+      // Number badge
+      this.ctx.fillStyle = '#ec4899';
+      this.ctx.beginPath();
+      this.ctx.arc(100, y + 30, 50, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.drawText(`${i + 1}`, 100, y + 5, 80, { fontSize: 48 });
+
+      // Item text
+      this.drawText(item || `Item ${i + 1}`, 180, y, w - 220, {
+        fontSize: 44,
+        align: 'left',
+        stroke: '#000',
+        strokeWidth: 3
+      });
+    });
+  },
+
+  async renderHotTake(w, h, content, assets) {
+    // Background
+    if (assets['fire-bg']) {
+      await this.drawAsset(assets['fire-bg'], 0, 0, w, h);
+    } else {
+      // Dramatic gradient
+      const gradient = this.ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w);
+      gradient.addColorStop(0, '#4a1515');
+      gradient.addColorStop(0.5, '#2a0a0a');
+      gradient.addColorStop(1, '#0a0a0f');
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(0, 0, w, h);
+    }
+
+    // Fire emojis at top
+    this.drawText('🔥🔥🔥', w/2, SAFE_TOP + 40, w, { fontSize: 80 });
+
+    // "HOT TAKE" label
+    this.ctx.fillStyle = '#ef4444';
+    this.drawRoundedRect(w/2 - 150, SAFE_TOP + 160, 300, 70, 12);
+    this.ctx.fill();
+    this.drawText('HOT TAKE', w/2, SAFE_TOP + 175, 280, { fontSize: 42 });
+
+    // Main take
+    const take = content.take || 'Your controversial opinion here...';
+    this.drawText(take, w/2, h/2 - 100, w - 100, {
+      fontSize: 58,
+      fontWeight: 'bold',
+      stroke: '#000',
+      strokeWidth: 5,
+      lineHeight: 1.4
+    });
+
+    // Fire emojis at bottom
+    this.drawText('🔥🔥🔥', w/2, h - SAFE_BOTTOM - 80, w, { fontSize: 80 });
+  },
+
+  // ============================================
+  // MINI PREVIEW FOR UI
+  // ============================================
+
+  renderMiniPreview(template, container) {
+    const colors = {
+      'drake': ['#2a2a2a', '#1f2f1f'],
+      'screenshot-caption': ['#1a1a2e', '#2a2a3e'],
+      'breaking-news': ['#0f1628', '#CC0000'],
+      'expanding-brain': ['#111118', '#1a1a2e'],
+      'this-vs-that': ['#1a1a2e', '#2e1a1a'],
+      'reaction-text': ['#0a0a0f', '#1a1a2e'],
+      'quote-card': ['#1a1a2e', '#0f0f1e'],
+      'news-ticker': ['#0f1628', '#CC0000'],
+      'pov-stopper': ['#0a0a0f', '#1a1a2e'],
+      'before-after': ['#2a1a1a', '#1a2a1a'],
+      'listicle': ['#1a1a2e', '#ec4899'],
+      'hot-take': ['#4a1515', '#ef4444']
+    };
+
+    const [bg, accent] = colors[template.id] || ['#1a1a2e', '#3b82f6'];
+
+    container.innerHTML = `
+      <div style="height:100%;background:linear-gradient(135deg,${bg},#0a0a0f);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;border-radius:8px;">
+        <div style="font-size:24px;margin-bottom:4px;">${template.icon}</div>
+        <div style="font-size:9px;font-weight:600;color:#fff;margin-bottom:2px;">${template.name}</div>
+        <div style="font-size:7px;color:${accent};text-transform:uppercase;">${template.category}</div>
+      </div>
+    `;
   }
 };
