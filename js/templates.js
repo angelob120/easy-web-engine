@@ -91,10 +91,15 @@ const TemplateRenderer = {
         await this.renderHotTake(w, h, content, assets);
         break;
       case 'imgflip':
-        await this.renderImgflip(w, h, template, content);
+        await this.renderImgflip(w, h, template, content, assets);
         break;
       default:
-        this.renderPlaceholder(w, h, template.name);
+        // For any imgflip-imported template (type === 'imgflip'), use the imgflip renderer
+        if (template.type === 'imgflip' || template.imgflipId) {
+          await this.renderImgflip(w, h, template, content, assets);
+        } else {
+          this.renderPlaceholder(w, h, template.name);
+        }
     }
 
     return this.canvas.toDataURL('image/png');
@@ -212,14 +217,25 @@ const TemplateRenderer = {
   },
 
   // Imgflip template renderer — draws the locally stored image + text overlays
-  async renderImgflip(w, h, template, content) {
+  // Can also accept a background asset to use instead of the template's default image
+  async renderImgflip(w, h, template, content, assets) {
     const ctx = this.ctx;
 
-    // localImagePath is like /memes/imgflip-123.jpg — served by our own Express static route
-    // Prefix with origin so the browser can load it and we can draw to canvas without CORS issues
-    const imageUrl = template.localImagePath
-      ? (window.location.origin + template.localImagePath)
-      : null;
+    // Priority: 1) selected background asset, 2) template's localImagePath
+    let imageUrl = null;
+    
+    // Check if there's a background asset selected
+    if (assets && assets.background) {
+      imageUrl = assets.background.dataUrl || assets.background.serverUrl;
+      if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+        imageUrl = window.location.origin + imageUrl;
+      }
+    }
+    
+    // Fallback to template's local image
+    if (!imageUrl && template.localImagePath) {
+      imageUrl = window.location.origin + template.localImagePath;
+    }
 
     let bgImg = null;
     if (imageUrl) {
@@ -227,7 +243,10 @@ const TemplateRenderer = {
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
+        img.onerror = () => {
+          console.warn('Failed to load image:', imageUrl);
+          resolve(null);
+        };
         img.src = imageUrl;
       });
     }

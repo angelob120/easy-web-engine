@@ -380,7 +380,10 @@ async function doImport(memes, templates, res) {
       defaultMotion: 'zoom-in',
       type: 'imgflip',
       zones,
-      assetSlots: [],
+      // Add a background slot so users can swap the meme image
+      assetSlots: [
+        { id: 'background', label: 'Background Image (optional)', position: 'full', required: false }
+      ],
       importedAt: new Date().toISOString()
     };
 
@@ -401,6 +404,99 @@ async function doImport(memes, templates, res) {
   writeTemplates(templates);
   write({ type: 'done', imported, total });
 }
+
+// ============================================
+// ASSETS API — Browse scraped meme images
+// ============================================
+
+// Get all scraped meme images as assets (for use in any template)
+app.get('/api/assets/memes', (req, res) => {
+  try {
+    const files = fs.readdirSync(MEMES_DIR).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
+    const templates = readTemplates();
+    
+    // Build a map of filename → template info for metadata
+    const fileToTemplate = {};
+    templates.forEach(t => {
+      if (t.localImagePath) {
+        const fname = path.basename(t.localImagePath);
+        fileToTemplate[fname] = { name: t.name, imgflipId: t.imgflipId, category: t.category };
+      }
+    });
+    
+    const assets = files.map(f => {
+      const meta = fileToTemplate[f] || {};
+      const isGif = f.toLowerCase().endsWith('.gif');
+      return {
+        id: 'meme-' + f.replace(/\.[^.]+$/, ''),
+        filename: f,
+        url: '/memes/' + f,
+        name: meta.name || f.replace(/^imgflip-/, '').replace(/\.[^.]+$/, '').replace(/-/g, ' '),
+        category: isGif ? 'gif' : 'meme',
+        isGif,
+        imgflipId: meta.imgflipId || null
+      };
+    });
+    
+    res.json({
+      total: assets.length,
+      assets
+    });
+  } catch (e) {
+    res.json({ total: 0, assets: [], error: e.message });
+  }
+});
+
+// Get stats about meme storage
+app.get('/api/assets/stats', (req, res) => {
+  try {
+    const files = fs.readdirSync(MEMES_DIR);
+    const images = files.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+    const gifs = files.filter(f => /\.gif$/i.test(f));
+    const templates = readTemplates();
+    const imgflipTemplates = templates.filter(t => t.type === 'imgflip' || t.imgflipId);
+    
+    let totalBytes = 0;
+    files.forEach(f => {
+      try { totalBytes += fs.statSync(path.join(MEMES_DIR, f)).size; } catch {}
+    });
+    
+    res.json({
+      totalFiles: files.length,
+      images: images.length,
+      gifs: gifs.length,
+      templates: imgflipTemplates.length,
+      totalSizeMB: (totalBytes / (1024 * 1024)).toFixed(2)
+    });
+  } catch (e) {
+    res.json({ totalFiles: 0, images: 0, gifs: 0, templates: 0, totalSizeMB: '0', error: e.message });
+  }
+});
+
+// Migrate existing imgflip templates to have background asset slot
+app.post('/api/templates/migrate-imgflip', (req, res) => {
+  try {
+    const templates = readTemplates();
+    let migrated = 0;
+    
+    templates.forEach(t => {
+      if ((t.type === 'imgflip' || t.imgflipId) && (!t.assetSlots || t.assetSlots.length === 0)) {
+        t.assetSlots = [
+          { id: 'background', label: 'Background Image (optional)', position: 'full', required: false }
+        ];
+        migrated++;
+      }
+    });
+    
+    if (migrated > 0) {
+      writeTemplates(templates);
+    }
+    
+    res.json({ success: true, migrated, total: templates.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ============================================
 // START
