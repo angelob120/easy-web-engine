@@ -215,13 +215,17 @@ const TemplateRenderer = {
   async renderImgflip(w, h, template, content) {
     const ctx = this.ctx;
 
-    // Use the local server path — no CORS issues, no external dependency
-    const imageUrl = template.localImagePath || null;
-    let bgImg = null;
+    // localImagePath is like /memes/imgflip-123.jpg — served by our own Express static route
+    // Prefix with origin so the browser can load it and we can draw to canvas without CORS issues
+    const imageUrl = template.localImagePath
+      ? (window.location.origin + template.localImagePath)
+      : null;
 
+    let bgImg = null;
     if (imageUrl) {
       bgImg = await new Promise(resolve => {
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
         img.onerror = () => resolve(null);
         img.src = imageUrl;
@@ -229,32 +233,45 @@ const TemplateRenderer = {
     }
 
     if (bgImg) {
+      // Black background
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, w, h);
 
-      // Scale image to fill canvas while maintaining aspect ratio
-      const scale = Math.min(w / bgImg.width, h / bgImg.height);
-      const dw = bgImg.width * scale;
+      // Scale image to fill canvas width, center vertically
+      const scale = w / bgImg.width;
+      const dw = w;
       const dh = bgImg.height * scale;
-      const dx = (w - dw) / 2;
-      const dy = (h - dh) / 2;
-      ctx.drawImage(bgImg, dx, dy, dw, dh);
+      const dy = Math.max(0, (h - dh) / 2);
+      ctx.drawImage(bgImg, 0, dy, dw, dh);
 
-      // Overlay text zones
+      // Overlay text zones — split image into equal horizontal bands
       const zones = template.zones || [];
+      const fontSize = Math.max(52, Math.min(90, Math.floor(dw / (zones.length > 2 ? 12 : 9))));
+
       zones.forEach((zone, i) => {
         const text = content[zone.id] || '';
         if (!text) return;
-        const textY = dy + (dh / (zones.length + 1)) * (i + 1);
-        this.drawText(text.toUpperCase(), w / 2, textY, dw * 0.9, {
-          fontSize: Math.max(48, Math.floor(dw / 10)),
+
+        const bandH = dh / zones.length;
+        const bandY = dy + (i * bandH);
+        const padding = fontSize * 0.3;
+
+        // Semi-transparent strip behind text for readability
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(0, bandY, w, bandH * 0.55);
+
+        this.drawText(text.toUpperCase(), w / 2, bandY + padding, dw - 60, {
+          fontSize,
           color: '#FFFFFF',
           stroke: '#000000',
-          strokeWidth: 6,
+          strokeWidth: Math.max(4, Math.floor(fontSize / 12)),
           fontWeight: 'bold',
-          align: 'center'
+          align: 'center',
+          lineHeight: 1.15,
+          maxLines: 3
         });
       });
+
     } else {
       this.renderPlaceholder(w, h, template.name);
     }

@@ -328,11 +328,15 @@ async function doImport(memes, templates, res) {
   const total = memes.length;
   let done = 0;
   let imported = 0;
+  let skipped = 0;
+  let failed = 0;
 
   for (const meme of memes) {
     if (importedIds.has(String(meme.id))) {
       done++;
-      write({ type: 'progress', done, total, skipped: true, name: meme.name });
+      skipped++;
+      // Only send progress update every 50 skips to avoid log flood
+      if (skipped % 50 === 0) write({ type: 'progress', done, total, skipped: true, name: meme.name });
       continue;
     }
 
@@ -344,10 +348,15 @@ async function doImport(memes, templates, res) {
 
     let localImagePath = null;
     if (!rawUrl || !rawUrl.startsWith('http')) {
-      console.warn('Download skipped (no valid URL):', meme.name, '| url:', rawUrl || '(empty)');
+      failed++;
+      // Only log occasional failures, not every one
+      if (failed <= 5 || failed % 50 === 0) console.warn('Download skipped (no valid URL):', meme.name, '| url:', rawUrl || '(empty)');
     } else {
       try { localImagePath = await downloadFile(rawUrl, filename); }
-      catch (e) { console.warn('Download failed:', meme.name, e.message); }
+      catch (e) {
+        failed++;
+        if (failed <= 5 || failed % 50 === 0) console.warn('Download failed:', meme.name, e.message);
+      }
     }
 
     const boxCount = Math.max(1, parseInt(meme.box_count) || 2);
@@ -383,7 +392,10 @@ async function doImport(memes, templates, res) {
     // Save every 50 so a crash doesn't lose everything
     if (imported % 50 === 0) writeTemplates(templates);
 
-    write({ type: 'progress', done, total, name: meme.name, isGif, localImagePath });
+    // Only stream progress update every 10 to reduce log volume
+    if (imported % 10 === 0 || done === total) {
+      write({ type: 'progress', done, total, name: meme.name, isGif, localImagePath });
+    }
   }
 
   writeTemplates(templates);
