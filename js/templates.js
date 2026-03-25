@@ -90,6 +90,9 @@ const TemplateRenderer = {
       case 'hot-take':
         await this.renderHotTake(w, h, content, assets);
         break;
+      case 'imgflip':
+        await this.renderImgflip(w, h, template, content);
+        break;
       default:
         this.renderPlaceholder(w, h, template.name);
     }
@@ -206,6 +209,55 @@ const TemplateRenderer = {
     this.ctx.lineTo(x, y + r);
     this.ctx.quadraticCurveTo(x, y, x + r, y);
     this.ctx.closePath();
+  },
+
+  // Imgflip template renderer — draws the locally stored image + text overlays
+  async renderImgflip(w, h, template, content) {
+    const ctx = this.ctx;
+
+    // Use the local server path — no CORS issues, no external dependency
+    const imageUrl = template.localImagePath || null;
+    let bgImg = null;
+
+    if (imageUrl) {
+      bgImg = await new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = imageUrl;
+      });
+    }
+
+    if (bgImg) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
+
+      // Scale image to fill canvas while maintaining aspect ratio
+      const scale = Math.min(w / bgImg.width, h / bgImg.height);
+      const dw = bgImg.width * scale;
+      const dh = bgImg.height * scale;
+      const dx = (w - dw) / 2;
+      const dy = (h - dh) / 2;
+      ctx.drawImage(bgImg, dx, dy, dw, dh);
+
+      // Overlay text zones
+      const zones = template.zones || [];
+      zones.forEach((zone, i) => {
+        const text = content[zone.id] || '';
+        if (!text) return;
+        const textY = dy + (dh / (zones.length + 1)) * (i + 1);
+        this.drawText(text.toUpperCase(), w / 2, textY, dw * 0.9, {
+          fontSize: Math.max(48, Math.floor(dw / 10)),
+          color: '#FFFFFF',
+          stroke: '#000000',
+          strokeWidth: 6,
+          fontWeight: 'bold',
+          align: 'center'
+        });
+      });
+    } else {
+      this.renderPlaceholder(w, h, template.name);
+    }
   },
 
   renderPlaceholder(w, h, name) {

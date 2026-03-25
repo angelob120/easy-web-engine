@@ -250,7 +250,10 @@ const App = {
         '<span class="tpl-count">' + all.length + ' templates total</span>' +
         '<span class="tpl-visible-count">👁️ ' + visibleCount + ' shown in editor</span>' +
       '</div>' +
-      '<button class="btn btn-pink" onclick="App.openTemplateEditor(null)">+ New Template</button>' +
+      '<div class="template-mgmt-btns">' +
+        '<button class="btn btn-secondary" onclick="App.openImgflipImporter()">📥 Import from Imgflip</button>' +
+        '<button class="btn btn-pink" onclick="App.openTemplateEditor(null)">+ New Template</button>' +
+      '</div>' +
     '</div>' +
     '<div class="template-mgmt-grid">';
 
@@ -299,6 +302,187 @@ const App = {
       this.templates = this.templates.filter(t => t.id !== id);
       this.renderTemplatesPage();
     } catch (e) { alert('Failed to delete: ' + e.message); }
+  },
+
+  // ============================================
+  // IMGFLIP IMPORTER
+  // ============================================
+
+  async openImgflipImporter() {
+    // Show loading modal
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay active';
+    modal.id = 'imgflip-importer-modal';
+    modal.innerHTML =
+      '<div class="modal modal-large imgflip-importer">' +
+        '<div class="modal-header">' +
+          '<h3>📥 Import from Imgflip</h3>' +
+          '<button class="close-btn" onclick="document.getElementById(\'imgflip-importer-modal\').remove()">×</button>' +
+        '</div>' +
+        '<div class="imgflip-importer-body">' +
+          '<div class="imgflip-loading">Loading meme templates... ⏳</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    // Fetch memes from server proxy
+    let memes = [];
+    try {
+      const res = await fetch('/api/imgflip/memes');
+      const data = await res.json();
+      memes = data.data?.memes || [];
+    } catch (e) {
+      modal.querySelector('.imgflip-loading').textContent = '❌ Failed to load memes. Check your connection.';
+      return;
+    }
+
+    // Already imported ids
+    const importedIds = new Set(this.templates.filter(t => t.imgflipId).map(t => t.imgflipId));
+    const selected = new Set();
+
+    const body = modal.querySelector('.imgflip-importer-body');
+    body.innerHTML =
+      '<div class="imgflip-toolbar">' +
+        '<span class="imgflip-count"><span id="imgflip-selected-count">0</span> selected of ' + memes.length + ' memes</span>' +
+        '<div class="imgflip-toolbar-btns">' +
+          '<button class="btn-small" onclick="App.imgflipSelectAll()">Select All</button>' +
+          '<button class="btn-small" onclick="App.imgflipSelectNone()">Clear</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="imgflip-grid" id="imgflip-grid">' +
+        memes.map(m => {
+          const alreadyImported = importedIds.has(String(m.id));
+          return '<div class="imgflip-card' + (alreadyImported ? ' already-imported' : '') + '" ' +
+            'data-id="' + m.id + '" ' +
+            (alreadyImported ? '' : 'onclick="App.imgflipToggleSelect(\'' + m.id + '\')"') + '>' +
+            '<img src="' + m.url + '" alt="' + m.name + '" loading="lazy">' +
+            '<div class="imgflip-card-info">' +
+              '<span class="imgflip-name">' + m.name + '</span>' +
+              '<span class="imgflip-boxes">' + m.box_count + ' text ' + (m.box_count === 1 ? 'zone' : 'zones') + '</span>' +
+            '</div>' +
+            (alreadyImported ? '<div class="imgflip-imported-badge">✓ Added</div>' : '<div class="imgflip-select-indicator">+</div>') +
+          '</div>';
+        }).join('') +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="document.getElementById(\'imgflip-importer-modal\').remove()">Cancel</button>' +
+        '<button class="btn btn-pink" id="imgflip-import-btn" onclick="App.doImportImgflip()" disabled>Import Selected</button>' +
+      '</div>';
+
+    // Store memes list for later use
+    this._imgflipMemes = memes;
+    this._imgflipSelected = selected;
+  },
+
+  imgflipToggleSelect(id) {
+    const card = document.querySelector('.imgflip-card[data-id="' + id + '"]');
+    if (!card || card.classList.contains('already-imported')) return;
+    if (this._imgflipSelected.has(id)) {
+      this._imgflipSelected.delete(id);
+      card.classList.remove('selected');
+    } else {
+      this._imgflipSelected.add(id);
+      card.classList.add('selected');
+    }
+    document.getElementById('imgflip-selected-count').textContent = this._imgflipSelected.size;
+    document.getElementById('imgflip-import-btn').disabled = this._imgflipSelected.size === 0;
+  },
+
+  imgflipSelectAll() {
+    this._imgflipMemes.forEach(m => {
+      const alreadyImported = this.templates.some(t => t.imgflipId === String(m.id));
+      if (!alreadyImported) {
+        this._imgflipSelected.add(String(m.id));
+        document.querySelector('.imgflip-card[data-id="' + m.id + '"]')?.classList.add('selected');
+      }
+    });
+    document.getElementById('imgflip-selected-count').textContent = this._imgflipSelected.size;
+    document.getElementById('imgflip-import-btn').disabled = this._imgflipSelected.size === 0;
+  },
+
+  imgflipSelectNone() {
+    this._imgflipSelected.clear();
+    document.querySelectorAll('.imgflip-card.selected').forEach(c => c.classList.remove('selected'));
+    document.getElementById('imgflip-selected-count').textContent = '0';
+    document.getElementById('imgflip-import-btn').disabled = true;
+  },
+
+  async doImportImgflip() {
+    const btn = document.getElementById('imgflip-import-btn');
+    btn.textContent = 'Downloading...';
+    btn.disabled = true;
+
+    const selectedMemes = this._imgflipMemes.filter(m => this._imgflipSelected.has(String(m.id)));
+    const total = selectedMemes.length;
+
+    // Show progress bar in modal
+    const body = document.querySelector('#imgflip-importer-modal .imgflip-importer-body');
+    body.innerHTML =
+      '<div class="imgflip-download-progress">' +
+        '<div class="imgflip-dl-title">Downloading ' + total + ' images to server...</div>' +
+        '<div class="imgflip-dl-bar-wrap"><div class="imgflip-dl-bar" id="imgflip-dl-bar"></div></div>' +
+        '<div class="imgflip-dl-status" id="imgflip-dl-status">Starting...</div>' +
+        '<div class="imgflip-dl-log" id="imgflip-dl-log"></div>' +
+      '</div>';
+
+    const bar = document.getElementById('imgflip-dl-bar');
+    const status = document.getElementById('imgflip-dl-status');
+    const log = document.getElementById('imgflip-dl-log');
+
+    try {
+      const res = await fetch('/api/imgflip/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memes: selectedMemes })
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let importedTemplates = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete line
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            if (msg.type === 'progress') {
+              const pct = Math.round((msg.done / msg.total) * 100);
+              bar.style.width = pct + '%';
+              status.textContent = msg.done + ' / ' + msg.total + ' — ' + (msg.skipped ? '(skipped) ' : '✓ ') + msg.name;
+              if (!msg.skipped) {
+                const entry = document.createElement('div');
+                entry.className = 'imgflip-dl-entry';
+                entry.textContent = '✓ ' + msg.name;
+                log.insertBefore(entry, log.firstChild);
+              }
+            } else if (msg.type === 'done') {
+              importedTemplates = msg.templates || [];
+              bar.style.width = '100%';
+              status.textContent = '✅ Done! ' + msg.imported + ' memes saved to server.';
+            }
+          } catch (e) { /* ignore parse errors */ }
+        }
+      }
+
+      // Add to local templates list
+      this.templates.push(...importedTemplates);
+      await new Promise(r => setTimeout(r, 1200));
+      document.getElementById('imgflip-importer-modal').remove();
+      this.renderTemplatesPage();
+
+    } catch (e) {
+      status.textContent = '❌ Import failed: ' + e.message;
+      btn.textContent = 'Retry';
+      btn.disabled = false;
+    }
   },
 
   // ============================================

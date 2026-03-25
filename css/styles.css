@@ -1821,3 +1821,231 @@ body {
 
 .hint a:hover { text-decoration: underline; }
 
+
+/* ============================================
+   IMGFLIP IMPORTER
+   ============================================ */
+
+.template-mgmt-btns {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.imgflip-importer .modal-header {
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+  z-index: 10;
+  border-bottom: 1px solid var(--border-light);
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.imgflip-importer-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.imgflip-loading {
+  padding: 60px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.imgflip-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-light);
+  position: sticky;
+  top: 60px;
+  background: var(--bg-primary);
+  z-index: 5;
+}
+
+.imgflip-count {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.imgflip-count span {
+  color: var(--accent-pink);
+  font-weight: 600;
+}
+
+.imgflip-toolbar-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.imgflip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  padding-bottom: 80px;
+}
+
+.imgflip-card {
+  background: var(--bg-card);
+  border: 2px solid var(--border-light);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+  position: relative;
+}
+
+.imgflip-card:not(.already-imported):hover {
+  border-color: var(--accent-pink);
+  transform: translateY(-2px);
+}
+
+.imgflip-card.selected {
+  border-color: var(--accent-pink);
+  background: rgba(236, 72, 153, 0.05);
+}
+
+.imgflip-card.already-imported {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.imgflip-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+
+.imgflip-card-info {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.imgflip-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.imgflip-boxes {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.imgflip-select-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  color: white;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  border: 1.5px solid rgba(255,255,255,0.3);
+}
+
+.imgflip-card.selected .imgflip-select-indicator {
+  background: var(--accent-pink);
+  content: '✓';
+}
+
+.imgflip-card.selected .imgflip-select-indicator::before {
+  content: '✓';
+}
+
+.imgflip-card.selected .imgflip-select-indicator {
+  font-size: 0;
+}
+
+.imgflip-card.selected .imgflip-select-indicator::before {
+  font-size: 13px;
+}
+
+.imgflip-imported-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(34, 197, 94, 0.8);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+}
+
+
+/* ============================================
+   IMGFLIP DOWNLOAD PROGRESS
+   ============================================ */
+
+.imgflip-download-progress {
+  padding: 32px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.imgflip-dl-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.imgflip-dl-bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.imgflip-dl-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent-pink), #a855f7);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.imgflip-dl-status {
+  font-size: 13px;
+  color: var(--text-muted);
+  min-height: 20px;
+}
+
+.imgflip-dl-log {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.imgflip-dl-entry {
+  font-size: 12px;
+  color: #4ade80;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
